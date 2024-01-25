@@ -29,7 +29,7 @@ bredband_fil <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/Bredband/
 st_layers(bredband_fil)
 
 bredband <- st_read(bredband_fil, layer = "PTS_brbkart2021_byggn_korr2", crs = 3006)
-mapview(bredband)
+# mapview(bredband)
 
 names(bredband)
 bredband <- bredband %>% 
@@ -39,7 +39,7 @@ unique(bredband$kommunkod)
 bredband_2026 <- bredband %>% 
   filter(kommunkod == "2026")|>
   st_make_valid()
-mapview(bredband_2026, zcol = "fiber_absnarhet")
+# mapview(bredband_2026, zcol = "fiber_absnarhet")
 # 
 # To determine the percentage of buildings connected to the internet based on a binary variable fiber_tillganglighet 
 # (where 1 indicates internet connection and 0 indicates no internet connection), you can follow a similar approach 
@@ -76,9 +76,9 @@ funktionella_orter_with_internet_share <- funktionella_orter %>%
   left_join(internet_connection_summary_df, by = "unique_id")
 
 # Visualize on a map
-mapview(funktionella_orter_with_internet_share, zcol = "share_connected", legend = TRUE)+
-  mapview(bredband_2026, zcol = "fiber_absnarhet")+
-  mapview(buildings_centroids, zcol = "fiber_absnarhet")
+# mapview(funktionella_orter_with_internet_share, zcol = "share_connected", legend = TRUE)+
+#   mapview(bredband_2026, zcol = "fiber_absnarhet")+
+#   mapview(buildings_centroids, zcol = "fiber_absnarhet")
 
 regionalnod_bredband <- funktionella_orter_with_internet_share %>% 
   st_centroid() %>% 
@@ -86,13 +86,14 @@ regionalnod_bredband <- funktionella_orter_with_internet_share %>%
 
 # %>% 
 #   filter(share_connected >= 60)
-mapview(regionalnod_bredband, zcol = "share_connected", cex = "share_connected")+
-  mapview(regionalnod_sysselsattning, zcol = "sum_dagbef", cex = "sum_dagbef")+
-  mapview(tatort_layer, col.regions = "blue", alpha.regions = 0.3)
-
-mapview(regionalnod_bredband, col.regions = "green", cex = 5)+
-  mapview(regionalnod_sysselsattning, col.regions = "orange", cex = 3)+
-  mapview(tatort_layer, col.regions = "blue", alpha.regions = 0.2)
-
-
-
+# mapview(regionalnod_bredband, zcol = "share_connected", cex = "share_connected")+
+#   mapview(regionalnod_sysselsattning, zcol = "sum_dagbef", cex = "sum_dagbef")+
+#   mapview(tatort_layer, col.regions = "blue", alpha.regions = 0.3)
+# 
+# mapview(regionalnod_bredband, col.regions = "green", cex = 5)+
+#   mapview(regionalnod_sysselsattning, col.regions = "orange", cex = 3)+
+#   mapview(tatort_layer, col.regions = "blue", alpha.regions = 0.2)+
+#   mapview(funktionella_orter, col.regions = "lightblue", alpha.regions = 0.2)
+# 
+# st_write(funktionella_orter_with_internet_share, "funktionella_orter.gpkg", layer = "funktionella_orter_bredband", driver = "GPKG")
+# 
