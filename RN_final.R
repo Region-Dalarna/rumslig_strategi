@@ -36,30 +36,159 @@ options(scipen=999)
 # funktionella orter är skapade i ett annat skript
 # Om vi vill använda andra orter som t.ex. Tätorter ändra till tatortskod <- unique_id
 
-funktionella_orter_fil <- "funktionella_orter.gpkg"                  # gpkg sparat i projektet finns att ladda ner från repository
+omr_fil <- "G:/Samhällsanalys/GIS/grundkartor/" # filsökväg till småort, tätort och fritidshusområde
+smaort <- "smaorter/So2015_Swe99TM.shp"
+tatort <- "tatorter/Tatorter_1980_2020.gpkg"
+fritid_omr <- "fritidshusomraden/Fo2015_Swe99TM.shp"
+
+fil_anl <- "G:/Samhällsanalys/GIS/Geotorget/anlaggningsomrade_ln20/"  # filsökväg till anläggningsområden
+anlag_omr <- "anlaggningsomrade_ln20.gpkg"
+#funktionella_orter_fil <- "funktionella_orter.gpkg"                  # gpkg sparat i projektet finns att ladda ner från repository
+buffer = 200   # buffer till funktionella orter
 
 # Komersiell service nedladdat från Pipos Serviceanalys 2023-03, 8 st CSV-filer
 kom_serv_filer <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/FrånPipos/"
 
+grans_kom_service <- 1
+grans_grund_service <- 1
+
 # Bredband, data från Bredbandskoordinator 2023
 bredband_fil <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/Bredband/PTS_brbkart2021_byggn_korr2.gpkg"
-
+grans_bredband <- 60
+grans_byggnad <- 100
 # Offentlig service (sjukvård, Utbudspunkter)
 sjukvard_fil <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/Offentlig_service/Utbudspunkter.csv"
 
 # Sysselsättning
-dagbef_fil <- "dag_natt_bef_ruta1km.gpkg"
+dagbef_fil <- "dag_natt_bef_ruta1km.gpkg"               # ersätt med 100 meterruta
+
+grans_dagbef <- 100 
 
 
-# =============== Analysen =========================================================
-# =============== Funktionella orter
-funktionella_orter <- st_read("funktionella_orter_fil", crs = 3006) 
+# =============== Analysen Funktionella orter ==========================
+
+smaort <- st_read(paste0(omr_fil, smaort), crs = 3006)
+smaort_layer <- smaort |> 
+  filter(LANSNAMN == "Dalarna")
+
+#st_layers(paste0(fil, tatort))
+tatort_layer <- st_read(paste0(omr_fil, tatort), layer = "To2020_SR99TM", crs = 3006)
+tatort_layer <- tatort_layer |> 
+  dplyr::filter(LAN == "20")
+
+fritid_layer <- st_read(paste0(omr_fil, fritid_omr), crs = 3006)
+fritid_layer <- fritid_layer |> 
+  dplyr::filter(LANSNAMN == "Dalarna")
+
+anlag_omr_path <- paste0(fil_anl, anlag_omr)
+st_layers(anlag_omr_path)
+anlag_layer <- st_read(anlag_omr_path, layer = "anlaggningsomrade", crs = 3006)
+
+# Buffra varje lager
+tatort_buffer <- st_buffer(tatort_layer, dist = buffer)    # inställningar finns uppe vid filsökvägar
+smaort_buffer <- st_buffer(smaort_layer, dist = buffer)
+fritid_buffer <- st_buffer(fritid_layer, dist = buffer)
+anlag_buffer <- st_buffer(anlag_layer, dist = buffer)
+
+# Lägg till prioritet
+tatort_buffer$priority <- 1
+smaort_buffer$priority <- 2
+fritid_buffer$priority <- 3
+anlag_buffer$priority <- 4
+
+# fixar kolumner så att alla lager ser lika ut i uppsättningen  
+
+funk_tatort <- tatort_buffer |> 
+  dplyr::select(TATORTSKOD, TATORT, KOMMUNNAMN, KOMMUN, BEF, geom, priority) |> 
+  rename(namn = TATORT, 
+         kod = TATORTSKOD, 
+         kommun = KOMMUN, 
+         kommunnamn = KOMMUNNAMN, 
+         befolkning = BEF) |> 
+  mutate(omr = "Tätort")
+
+funk_smaort <- smaort_buffer |> 
+  dplyr::select(SMAORT, KOMMUNNAMN, KOMMUNKOD, BEF, geometry, priority) |> 
+  rename(kod = SMAORT, 
+         kommun = KOMMUNKOD, 
+         kommunnamn = KOMMUNNAMN, 
+         befolkning = BEF,
+         geom = geometry) |> 
+  mutate(namn = NA, omr = "Småort")
+
+funk_fritid <- fritid_buffer |> 
+  dplyr::select(FRITIDSHUS, KOMMUNNAMN, KOMMUNKOD, geometry, priority) |> 
+  rename(kod = FRITIDSHUS, 
+         kommun = KOMMUNKOD, 
+         kommunnamn = KOMMUNNAMN,
+         geom = geometry) |> 
+  mutate(befolkning = NA, namn = NA, omr = "Fritidshusområde")
+
+funk_anlag <- anlag_buffer |> 
+  dplyr::select(objekttyp, andamal, geom, priority) |> 
+  mutate(namn = paste(objekttyp, andamal, sep = ", ")) |>
+  select(namn, geom, priority) |>
+  mutate(befolkning = NA, kommun = NA, kommunnamn = NA, kod = NA, omr = "Anläggningsområde")
+
+standard_order <- c("omr", "kod", "namn", "kommunnamn", "kommun", "befolkning", "priority", "geom")
+
+funk_anlag <- funk_anlag[standard_order]
+funk_smaort <- funk_smaort[standard_order]
+funk_tatort <- funk_tatort[standard_order]
+funk_fritid <- funk_fritid[standard_order]
+
+funk_ort <- rbind(funk_tatort, funk_smaort, funk_fritid, funk_anlag) |> 
+  mutate(funk_ort= "funk_ort")
+
+funk_ort_diss <- funk_ort %>%
+  st_make_valid() %>%
+  group_by(funk_ort) %>%
+  summarize(geom = st_union(geom))
+
+# Antag att funk_ort_diss är ditt multipolygon-objekt
+# Dela upp multipolygonen till enskilda polygoner
+single_polygons <- st_cast(funk_ort_diss, "POLYGON")
+
+# Skapa centroider för funk_ort
+funk_ort_centroids <- st_centroid(funk_ort)
+
+# Step 1: Spatial Join
+joined_data <- st_join(single_polygons, funk_ort_centroids)
+
+# Step 2 & 3: Sorting and Filtering
+# Assuming 'priority' and 'population' are the column names in 'centroids'
+processed_data <- joined_data %>%
+  arrange(priority, desc(befolkning)) %>%
+  group_by(geom) %>%
+  slice(1) %>%
+  ungroup()
+
+# Step 4: Cleanup
+# Removing duplicates and keeping necessary columns
+final_data <- processed_data %>%
+  distinct(geom, .keep_all = TRUE)
+
+# Adding a unique ID column to the final data
+final_data_with_id <- final_data %>%
+  mutate(unique_id = row_number())
+
+funktionella_orter <- final_data_with_id
+
+# st_write(funktionella_orter, "funktionella_orter.gpkg", layer = "funktionella_orter", driver = "GPKG")
+
+#funktionella_orter <- st_read("funktionella_orter_fil", crs = 3006) 
 
 funktionella_orter <- funktionella_orter%>% 
   select(!funk_ort.y) %>% 
   rename(funk_ort = funk_ort.x, namn_ort = namn)
 
 # ============= Analys Komersiell service =============================================================
+
+# Definition: Kommersiell service samt en annan grundläggande service på platsen.   
+# Med kommersiell service menas dagligvaruhandel och/eller drivmedel.  
+# Med annan grundläggande service menas post-och pakettjänster, kontantuttag, betaltjänster eller  
+# dagskassehantering, samt ombudstjänster för apoteksvaror.
+
 # En funktion som läser och konverterar CSV till sf-objekt
 read_and_convert_to_sf <- function(file_path, x_col, y_col, crs, service_abbr, service_category) {
   df <- read.csv(file_path, header = TRUE, sep = ";", fileEncoding = "ISO-8859-1") %>%
@@ -117,24 +246,20 @@ service_aggregates <- all_services_in_orter %>%
   )
 # Identify and filter 'funktionella_orter' with at least one of each service type
 
-# Definition: Kommersiell service samt en annan grundläggande service på platsen.   
-# Med kommersiell service menas dagligvaruhandel och/eller drivmedel.  
-# Med annan grundläggande service menas post-och pakettjänster, kontantuttag, betaltjänster eller  
-# dagskassehantering, samt ombudstjänster för apoteksvaror.
 # Join the aggregates back to the funktionella_orter sf object
 funktionella_orter_kommersiell_service <- st_join(funktionella_orter, service_aggregates, by = "unique_id")
 
 # Filtrera för att hitta orter med minst en grundläggande och en kommersiell service
 regionalnod_kommersiell_service <- funktionella_orter_kommersiell_service %>%
-  filter(sum_grund_serv >= 1 & sum_kom_serv >= 1)
+  filter(sum_grund_serv >= grans_grund_service & sum_kom_serv >= grans_kom_service)
 
 # Beräkna centroider för dessa filtrerade orter
-regionalnod_kommersiell_service <- st_centroid(regionalnod_kommersiell_service_test)
+regionalnod_kommersiell_service <- st_centroid(regionalnod_kommersiell_service)
 
 
   # Antag att 'labelText' är en kolumn i dina sf-objekt som innehåller den text du vill visa i popups
   # Om så inte är fallet, behöver du först skapa den. Exempel:
-  apotek_sf$labelText <- "Apotekstjänst"
+apotek_sf$labelText <- "Apotekstjänst"
 betalnings_formedling_sf$labelText <- "Betalningsförmedling"
 dagkasse_insattning_sf$labelText <- "Dagkasseinsättning"
 dagligvaror_EJ_fullsort_sf$labelText <- "Dagligvaror Ej Fullsortiment"
@@ -142,32 +267,28 @@ dagligvaror_fullsort_sf$labelText <- "Dagligvaror Fullsortiment"
 drivmedel_personbil_sf$labelText <- "Drivmedel för Personbil"
 posttjanster_sf$labelText <- "Posttjänster"
 uttagsautomat_sf$labelText <- "Uttagautomat"
-funktionella_orter_kommersiell_service$labelText <- paste("En funktionell ort, ett försök att inkludera hela Dalarna i analysen, inte bara aktivitet i tätorter",
-"Funktionella orter består av tätorter, småorter, fritidshusområden och anläggningsområden", sep = "<br>")
+funktionella_orter_kommersiell_service$labelText <- paste("Detta är en funktionell ort. Ett experiment och ett försök att inkludera hela Dalarna, ",
+                                                          "istället för att endast analysera aktivitet i tätorter. Funktionella orter består av tätorter, ",
+                                                          " småorter, fritidshusområden och anläggningsområden", sep = "<br>")
 regionalnod_kommersiell_service$labelText <- paste("Regionalnod definition: Kommersiell service samt en annan grundläggande service på platsen.",
                                                    "Med kommersiell service menas dagligvaruhandel och/eller drivmedel.",
                                                    "Med annan grundläggande service menas post-och pakettjänster, kontantuttag, betaltjänster eller",
                                                    "dagskassehantering, samt ombudstjänster för apoteksvaror.", sep = "<br>")
 
-# Visualize
-
-
-mapview(funktionella_orter_kommersiell_service, col.regions = "grey", label = "labelText", layer.name = "Funktionella Orter", homebutton = FALSE) +
-  mapview(regionalnod_kommersiell_service, col.region = "black", cex = 20, alpha.regions = 0.2, label = "labelText", layer.name = "Regionalnoder", homebutton = FALSE) +
-  mapview(apotek_sf, col.region = "blue", label = "labelText", layer.name = "Apotek", homebutton = FALSE) +
-  mapview(betalnings_formedling_sf, col.region = "red", label = "labelText", layer.name = "Betalningsförmedling", homebutton = FALSE) +
-  mapview(dagkasse_insattning_sf, col.region = "green", label = "labelText", layer.name = "Dagkasseinsättning", homebutton = FALSE) +
-  mapview(dagligvaror_EJ_fullsort_sf, col.region = "yellow", label = "labelText", layer.name = "Dagligvaror Ej Fullsortiment", homebutton = FALSE) +
-  mapview(dagligvaror_fullsort_sf, col.region = "purple", label = "labelText", layer.name = "Dagligvaror Fullsortiment", homebutton = FALSE) +
-  mapview(drivmedel_personbil_sf, col.region = "orange", label = "labelText", layer.name = "Drivmedel för Personbil", homebutton = FALSE) +
-  mapview(posttjanster_sf, col.region = "brown", label = "labelText", layer.name = "Posttjänster", homebutton = FALSE) +
-  mapview(uttagsautomat_sf, col.region = "pink", label = "labelText", layer.name = "Uttagsautomat", homebutton = FALSE)
-
-# # Visa kartan
-# map
-
+# mapview(funktionella_orter_kommersiell_service, col.regions = "grey", label = "labelText", layer.name = "Funktionella Orter", homebutton = FALSE) +
+#   mapview(regionalnod_kommersiell_service, col.regions = "black", cex = 20, alpha.regions = 0.2, label = "labelText", layer.name = "Regionalnoder komersiell service", homebutton = FALSE) +
+#   mapview(apotek_sf, col.regions = "blue", label = "labelText", layer.name = "Apotek", homebutton = FALSE) +
+#   mapview(betalnings_formedling_sf, col.regions = "red", label = "labelText", layer.name = "Betalningsformedling", homebutton = FALSE) +
+#   mapview(dagkasse_insattning_sf, col.regions = "green", label = "labelText", layer.name = "Dagkasseinsattning", homebutton = FALSE) +
+#   mapview(dagligvaror_EJ_fullsort_sf, col.regions = "yellow", label = "labelText", layer.name = "Dagligvaror Ej Fullsortiment", homebutton = FALSE) +
+#   mapview(dagligvaror_fullsort_sf, col.regions = "purple", label = "labelText", layer.name = "Dagligvaror Fullsortiment", homebutton = FALSE) +
+#   mapview(drivmedel_personbil_sf, col.regions = "orange", label = "labelText", layer.name = "Drivmedel Personbil", homebutton = FALSE) +
+#   mapview(posttjanster_sf, col.regions = "brown", label = "labelText", layer.name = "Posttjanster", homebutton = FALSE) +
+#   mapview(uttagsautomat_sf, col.regions = "pink", label = "labelText", layer.name = "Uttagsautomat", homebutton = FALSE)
 
 # ===================== Bredband =============================
+
+
 bredband_fil <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/Bredband/PTS_brbkart2021_byggn_korr2.gpkg"
 
 st_layers(bredband_fil)
@@ -177,10 +298,6 @@ bredband <- st_read(bredband_fil, layer = "PTS_brbkart2021_byggn_korr2", crs = 3
 bredband <- bredband %>% 
   select(ANDAMAL_1T, uuid, kommunkod, tatortkod_21, smaortkod_15, hus_antal, arb_antal, fritidshus, fiber_absnarhet, fiber)|>
   st_make_valid()
-
-# To determine the percentage of buildings connected to the internet based on a binary variable fiber_tillganglighet 
-# (where 1 indicates internet connection and 0 indicates no internet connection), you can follow a similar approach 
-# to the script you provided, with adjustments for the specific variable and calculation you're interested in. 
 
 # If necessary, create centroids for buildings data (if they're not already centroids)
 buildings_centroids <- st_centroid(bredband)
@@ -205,18 +322,11 @@ funktionella_orter_bredband <- funktionella_orter %>%
   left_join(internet_connection_summary_df, by = "unique_id")%>%
   mutate(andel_homes_passed = paste0(round(andel_homes_passed, 1), "%"))
 
-regionalnod_bredband <- funktionella_orter_bredband %>% 
-  st_centroid() %>% 
-  filter(andel_homes_passed >=60)
+# regionalnod_bredband <- funktionella_orter_bredband %>% 
+#   st_centroid() %>% 
+#   filter(andel_homes_passed >=60)
 
-# skapar en ny variabel till pop up i Mapview
-regionalnod_bredband$labelText <- paste("Regionalnod bredband definition:", 
-                                        "Minst 60 % av byggnader i orten ", 
-                                        "har fiber i direkt närhet till fastighet", sep = "<br>") 
 
-# Visualize on a map
-mapview(funktionella_orter_bredband)+
-  mapview(regionalnod_bredband, cex = 10)
 
 # ===================== Offentlig service (sjukvård) ==========
 # Läs in data
@@ -224,9 +334,6 @@ sjukvard <- read.csv(sjukvard_fil, header = TRUE, sep = ";", fileEncoding = "ISO
 # Ersätt kommatecken med punkter i koordinatkolumnerna
 sjukvard$Sweref99X <- as.numeric(gsub(",", ".", sjukvard$Sweref99X))
 sjukvard$Sweref99Y <- as.numeric(gsub(",", ".", sjukvard$Sweref99Y))
-
-# Kontrollera igen för att säkerställa att konverteringen lyckades
-head(sjukvard)
 
 # Försök konvertera till sf-objekt igen, efter att ha filtrerat bort eventuella NA-värden
 sjukvard_filtered <- sjukvard %>%
@@ -268,10 +375,6 @@ regionalnod_vardcentral <- funktionella_orter_sjukvard %>%
 
 regionalnod_vardcentral$labelText <- paste("Regional nod Vårdcentral definition:","Platser med Vårdcentral", sep = "<br>")
 
-mapview(regionalnod_sjukhus, cex = 10)+
-  mapview(regionalnod_vardcentral, cex = 6)+
-  mapview(funktionella_orter_sjukvard)
-
 # ===================== sysselsättning =================
 
 dagbef <- st_read(dagbef_fil) |> 
@@ -296,44 +399,79 @@ funktionella_orter_sysselsattning <- funktionella_orter %>%
   left_join(sum_sysselsattning_df, by = "unique_id") %>%
   mutate(sum_dagbef = ifelse(is.na(sum_dagbef), NA, sum_dagbef))
 
-# mapview(funktionella_orter_sysselsattning, zcol = "sum_dagbef")
-
-
 # make centroids of funktionella_orter_sysselsattning filter >= 100 sum_dagbef
 
 funktionella_orter_sysselsattning_centroids <- funktionella_orter_sysselsattning |> 
   st_centroid()
 
 regionalnod_sysselsattning <- funktionella_orter_sysselsattning_centroids |> 
-  filter(sum_dagbef >= 100)
+  filter(sum_dagbef >= grans_dagbef)
 
 regionalnod_sysselsattning$labelText <- paste("Regional nod sysselsättning definition:", 
                                               "Platser med minst 100 arbetstillfällen.", 
                                               "Oberoende av privat eller offentlig sektor.",
                                               "Oberoende av bransch.", sep = "<br>")
 
-# mapview(regionalnod_sysselsattning, zcol = "sum_dagbef", cex = "sum_dagbef")+
-#   mapview(tatort_layer, col.regions = "blue", alpha.regions = 0.3)
-# 
-# st_write(funktionella_orter_sysselsattning, "funktionella_orter.gpkg", layer = "funktionella_orter_sysselsattning", driver = "GPKG")
+# =================  join av funktionella orter ========================
+
+perform_join <- function(x, y, suffixes = c(".x", ".y")) {
+  joined <- st_join(x, y)
+  # Automatically make column names unique
+  colnames(joined) <- make.unique(colnames(joined))
+  return(joined)
+}
 
 
-
-funktionella_orter_joined <- st_join(funktionella_orter_bredband, funktionella_orter_kommersiell_service, join_by = "unique_id") %>% 
-  st_join(funktionella_orter_sysselsattning) %>% 
-  st_join(funktionella_orter_sjukvard)
+funktionella_orter_joined <- funktionella_orter_bredband %>%
+  perform_join(funktionella_orter_kommersiell_service) %>%
+  perform_join(funktionella_orter_sysselsattning) %>%
+  perform_join(funktionella_orter_sjukvard)
+names(funktionella_orter_final)
 
 funktionella_orter_final <- funktionella_orter_joined %>%
-  select(funk_ort = funk_ort.x, omr = omr.x, kod = kod.x, namn_ort = namn_ort.x, kommunnamn = kommunnamn.x,
-         kommun = kommun.x, befolkning = befolkning.x, priority = priority.x, unique_id = unique_id.x.x,
+  select(Typ_av_omr = omr.x...3, kod = kod.x...4, namn_ort = namn_ort.x...5, kommunnamn = kommunnamn.x...6,
+         kommun = kommun.x...7, befolkning = befolkning.x...8,
          sum_byggnader, byggnad_fiber_absnarhet, andel_homes_passed, n_service,
-         sum_grund_serv, sum_kom_serv, n_unik_grund_kom_serv, n_unik_alla_typer, labelText, sum_dagbef, 
-         sum_sjukvard, sum_VC, sum_SH, n_unik_sjukvard, geom = geom.x)
+         sum_grund_service = sum_grund_serv, sum_kom_service = sum_kom_serv, n_unik_grund_kom_service = n_unik_grund_kom_serv, n_unik_alla_typer_service = n_unik_alla_typer, labelText, sum_dagbef, 
+         sum_utbud = sum_sjukvard, sum_vardcentral = sum_VC, sum_sjukhus = sum_SH, n_unik_sjukvard, geom = geom.x)
+
+funktionella_orter_final$labelText <- paste("Detta är en funktionell ort. Ett experiment och ett försök att inkludera hela Dalarna, ",
+                    "istället för att endast analysera aktivitet i tätorter. Funktionella orter består av tätorter, ",
+                    " småorter, fritidshusområden och anläggningsområden", sep = "<br>")
+
+regionalnod_bredband <- funktionella_orter_final %>%
+  st_centroid() %>% 
+  filter(andel_homes_passed >= grans_bredband) %>% 
+  filter(sum_byggnader >= grans_byggnad) %>% 
+  select(Typ_av_omr, kod, namn_ort, 
+         kommunnamn, kommun, befolkning, 
+         sum_byggnader, byggnad_fiber_absnarhet, 
+         andel_homes_passed)
 
 
-mapview(funktionella_orter_final, col.regions = "lightblue", alpha.regions = 0.2, label = "labelText")+
-  mapview(regionalnod_sjukhus, col.regions = "red", cex = 15, label = "labelText")+
-  mapview(regionalnod_vardcentral, col.regions = "pink", cex = 12, label = "labelText")+
-  mapview(regionalnod_kommersiell_service, col.regions = "blue", cex = 9, label = "labelText")+
-  mapview(regionalnod_bredband, col.regions = "green", cex = 6, label = "labelText")+
-  mapview(regionalnod_sysselsattning, col.regions = "orange", cex = 3, label = "labelText")
+# skapar en ny variabel till pop up i Mapview
+regionalnod_bredband$labelText <- paste("Regionalnod bredband definition:", 
+                                        "Minst 60 % av byggnader i orten ", 
+                                        "har fiber i direkt närhet till fastighet", sep = "<br>") 
+
+# ========================== Kartan =================================================
+
+
+mapview(funktionella_orter_final, col.regions = "lightblue", alpha.regions = 0.2, label = "labelText", homebutton = FALSE, layer.name = "Funktionella orter")+
+  mapview(regionalnod_sjukhus, col.regions = "chartreuse4", cex = 25, label = "labelText", alpha.regions = 0.7, homebutton = FALSE)+
+  mapview(regionalnod_vardcentral, col.regions = "chartreuse1", cex = 20, label = "labelText", alpha.regions = 0.7, homebutton = FALSE)+
+  mapview(regionalnod_kommersiell_service, col.regions = "gold1", cex = 15, label = "labelText", alpha.regions = 0.7, homebutton = FALSE)+
+  mapview(regionalnod_bredband, col.regions = "orange2", cex = 10, label = "labelText", alpha.regions = 0.7, homebutton = FALSE)+
+  mapview(regionalnod_sysselsattning, col.regions = "red4", cex = 5, label = "labelText", alpha.regions = 0.7, homebutton = FALSE)+
+  mapview(apotek_sf, col.regions = "blueviolet", label = "labelText", layer.name = "Apotek", homebutton = FALSE, hide = TRUE) +
+  mapview(betalnings_formedling_sf, col.regions = "darkorchid1", label = "labelText", layer.name = "Betalningsformedling", homebutton = FALSE, hide = TRUE) +
+  mapview(dagkasse_insattning_sf, col.regions = "lightsalmon2", label = "labelText", layer.name = "Dagkasseinsattning", homebutton = FALSE, hide = TRUE) +
+  mapview(dagligvaror_EJ_fullsort_sf, col.regions = "deeppink4", label = "labelText", layer.name = "Dagligvaror Ej Fullsortiment", homebutton = FALSE, hide = TRUE) +
+  mapview(dagligvaror_fullsort_sf, col.regions = "lightslateblue", label = "labelText", layer.name = "Dagligvaror Fullsortiment", homebutton = FALSE, hide = TRUE) +
+  mapview(drivmedel_personbil_sf, col.regions = "deeppink", label = "labelText", layer.name = "Drivmedel Personbil", homebutton = FALSE, hide = TRUE) +
+  mapview(posttjanster_sf, col.regions = "brown", label = "labelText", layer.name = "Posttjanster", homebutton = FALSE, hide = TRUE) +
+  mapview(uttagsautomat_sf, col.regions = "pink", label = "labelText", layer.name = "Uttagsautomat", homebutton = FALSE, hide = TRUE)+
+  mapview(smaort_layer, col.regions = "cyan2", hide = TRUE, homebutton = FALSE, layer.name = "Smaorter") + 
+  mapview(tatort_layer, col.regions = "cyan4", hide = TRUE, homebutton = FALSE, layer.name = "Tatorter") + 
+  mapview(fritid_layer, col.regions = "cyan1", hide = TRUE, homebutton = FALSE, layer.name = "Fritidshusomrade") + 
+  mapview(anlag_layer, col.regions = "cyan3", hide = TRUE, homebutton = FALSE, layer.name = "Anlaggningsomrade")
