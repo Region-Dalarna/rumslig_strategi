@@ -63,37 +63,27 @@ buildings_in_orter <- st_join(buildings_centroids, funktionella_orter, join = st
 internet_connection_summary <- buildings_in_orter %>%
   group_by(unique_id) %>%  # Assume 'unique_id' uniquely identifies "funktionella_orter"
   summarise(
-    total_buildings = n(),
-    connected_buildings = sum(fiber_absnarhet, na.rm = TRUE),
-    share_connected = (connected_buildings / total_buildings) * 100
+    sum_byggnader = n(),
+    byggnad_fiber_absnarhet = sum(fiber_absnarhet, na.rm = TRUE),
+    andel_homes_passed = (byggnad_fiber_absnarhet / sum_byggnader) * 100
   )
 
 # Convert to a regular dataframe if it's an sf object (optional)
 internet_connection_summary_df <- as.data.frame(internet_connection_summary)
 
 # Join this summary back to the "funktionella_orter" spatial data for mapping
-funktionella_orter_with_internet_share <- funktionella_orter %>%
+funktionella_orter_bredband <- funktionella_orter %>%
   left_join(internet_connection_summary_df, by = "unique_id")
 
-# Visualize on a map
-# mapview(funktionella_orter_with_internet_share, zcol = "share_connected", legend = TRUE)+
-#   mapview(bredband_2026, zcol = "fiber_absnarhet")+
-#   mapview(buildings_centroids, zcol = "fiber_absnarhet")
-
-regionalnod_bredband <- funktionella_orter_with_internet_share %>% 
+regionalnod_bredband <- funktionella_orter_bredband %>% 
   st_centroid() %>% 
-  filter(share_connected >=60)
+  filter(andel_homes_passed >=60)
 
-# %>% 
-#   filter(share_connected >= 60)
-# mapview(regionalnod_bredband, zcol = "share_connected", cex = "share_connected")+
-#   mapview(regionalnod_sysselsattning, zcol = "sum_dagbef", cex = "sum_dagbef")+
-#   mapview(tatort_layer, col.regions = "blue", alpha.regions = 0.3)
+# Visualize on a map
+mapview(funktionella_orter_bredband, zcol = "andel_homes_passed", legend = TRUE)+
+  mapview(regionalnod_bredband, cex = 10)
+
 # 
-# mapview(regionalnod_bredband, col.regions = "green", cex = 5)+
-#   mapview(regionalnod_sysselsattning, col.regions = "orange", cex = 3)+
-#   mapview(tatort_layer, col.regions = "blue", alpha.regions = 0.2)+
-#   mapview(funktionella_orter, col.regions = "lightblue", alpha.regions = 0.2)
 # 
 # st_write(funktionella_orter_with_internet_share, "funktionella_orter.gpkg", layer = "funktionella_orter_bredband", driver = "GPKG")
 # 

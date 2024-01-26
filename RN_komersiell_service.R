@@ -38,15 +38,15 @@ all_services_in_orter <- st_join(all_services_sf, funktionella_orter, join = st_
 service_aggregates <- all_services_in_orter %>%
   group_by(unique_id) %>%
   summarise(
-    sum_serv = n(),
+    n_service = n(),
     sum_grund_serv = sum(service_category == "basic"),
     sum_kom_serv = sum(service_category == "commercial"),
-    unique_all_serv = n_distinct(service_category),
-    unique_types = n_distinct(service_type_abbr)
+    n_unik_grund_kom_serv = n_distinct(service_category),
+    n_unik_alla_typer = n_distinct(service_type_abbr)
   )
 
 # Join the aggregates back to the funktionella_orter sf object
-funktionella_orter_enriched <- st_join(funktionella_orter, service_aggregates, by = "unique_id")
+funktionella_orter_kommersiell_service <- st_join(funktionella_orter, service_aggregates, by = "unique_id")
 
 # Identify and filter 'funktionella_orter' with at least one of each service type
 # Definition: Kommersiell service samt en annan grundläggande service på platsen.   
@@ -65,13 +65,14 @@ eligible_orter <- funktionella_orter[funktionella_orter$unique_id %in% eligible_
 regionalnod_kommersiell_service <- st_centroid(eligible_orter)
 
 # Visualize
-mapview(funktionella_orter_enriched) +
-  mapview(regionalnod_kommersiell_service, col.region = "black", cex = 17)+
-  mapview(apotek_sf, col.region = "blue") +
-  mapview(betalnings_formedling_sf, col.region = "red") +
-  mapview(dagkasse_insattning_sf, col.region = "green") +
-  mapview(dagligvaror_EJ_fullsort_sf, col.region = "yellow") +
-  mapview(dagligvaror_fullsort_sf, col.region = "purple") +
-  mapview(drivmedel_personbil_sf, col.region = "orange") +
-  mapview(posttjanster_sf, col.region = "brown") +
-  mapview(uttagsautomat_sf, col.region = "pink")
+mapview(funktionella_orter_kommersiell_service) +
+  mapview(regionalnod_kommersiell_service, col.region = "black", cex = 17)
+# +
+#   mapview(apotek_sf, col.region = "blue") +
+#   mapview(betalnings_formedling_sf, col.region = "red") +
+#   mapview(dagkasse_insattning_sf, col.region = "green") +
+#   mapview(dagligvaror_EJ_fullsort_sf, col.region = "yellow") +
+#   mapview(dagligvaror_fullsort_sf, col.region = "purple") +
+#   mapview(drivmedel_personbil_sf, col.region = "orange") +
+#   mapview(posttjanster_sf, col.region = "brown") +
+#   mapview(uttagsautomat_sf, col.region = "pink")

@@ -40,13 +40,13 @@ sjukvard_aggregates <- sjukvard_in_orter %>%
     sum_sjukvard = n(),
     sum_VC = sum(FghKlass == "Vårdcentral"),
     sum_SH = sum(FghKlass == "Sjukhus"),
-    unique_sjukvard = n_distinct("")
+    n_unik_sjukvard = n_distinct("")
   )
 
 # Join the aggregates back to the funktionella_orter sf object
 funktionella_orter_sjukvard <- st_join(funktionella_orter, sjukvard_aggregates, by = "unique_id")
-mapview(funktionella_orter_sjukvard)
-head(funktionella_orter_sjukvard)
+# mapview(funktionella_orter_sjukvard)
+# head(funktionella_orter_sjukvard)
 
 
 regionalnod_sjukhus <- funktionella_orter_sjukvard %>%
@@ -58,7 +58,8 @@ regionalnod_vardcentral <- funktionella_orter_sjukvard %>%
   st_centroid()
 
 mapview(regionalnod_sjukhus, cex = 10)+
-  mapview(regionalnod_vardcentral, cex = 6)
+  mapview(regionalnod_vardcentral, cex = 6)+
+  mapview(funktionella_orter_sjukvard)
 
 
 
