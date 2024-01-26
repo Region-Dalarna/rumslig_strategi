@@ -1,3 +1,6 @@
+#Ett skript som skapar regional noder
+#Allt snyggt och imponerande nedan är skapat av min bästa kompis GPT4
+
 # libraries
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(tidyverse, 
@@ -27,24 +30,37 @@ set_config(config(ssl_verifypeer = 0L))
 
 # avoid scientific notation
 options(scipen=999)
-# ===========================läs in lager==================
-# "En funktionell ort, ett försök att inkludera hela Dalarna i analysen, inte bara aktivitet i tätorter",
-#"Funktionella orter består av tätorter, småorter, fritidshusområden och anläggningsområden", sep = "<br>"
+# =========================== läs in lager ==================
+# Funktionella orter är ett försök att inkludera hela Dalarna i analysen, inte bara aktivitet i tätorter. 
+# Funktionella orter består av tätorter, småorter, fritidshusområden och anläggningsområden samt en buffer på 200 meter.
+# funktionella orter är skapade i ett annat skript
+# Om vi vill använda andra orter som t.ex. Tätorter ändra till tatortskod <- unique_id
 
-#unique_id <- "tatortskod" # använd vid tätorter
-#iniqu
-  
-  
-funktionella_orter <- st_read("funktionella_orter.gpkg", crs = 3006) 
+funktionella_orter_fil <- "funktionella_orter.gpkg"                  # gpkg sparat i projektet finns att ladda ner från repository
+
+# Komersiell service nedladdat från Pipos Serviceanalys 2023-03, 8 st CSV-filer
+kom_serv_filer <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/FrånPipos/"
+
+# Bredband, data från Bredbandskoordinator 2023
+bredband_fil <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/Bredband/PTS_brbkart2021_byggn_korr2.gpkg"
+
+# Offentlig service (sjukvård, Utbudspunkter)
+sjukvard_fil <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/Offentlig_service/Utbudspunkter.csv"
+
+# Sysselsättning
+dagbef_fil <- "dag_natt_bef_ruta1km.gpkg"
+
+
+# =============== Analysen =========================================================
+# =============== Funktionella orter
+funktionella_orter <- st_read("funktionella_orter_fil", crs = 3006) 
 
 funktionella_orter <- funktionella_orter%>% 
   select(!funk_ort.y) %>% 
   rename(funk_ort = funk_ort.x, namn_ort = namn)
 
-# Komersiell service nedladdat från Pipos Serviceanalys 2023-03
-kom_serv_filer <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/FrånPipos/"
-
-# En fuktion som läser och konverterar CSV till sf-objekt
+# ============= Analys Komersiell service =============================================================
+# En funktion som läser och konverterar CSV till sf-objekt
 read_and_convert_to_sf <- function(file_path, x_col, y_col, crs, service_abbr, service_category) {
   df <- read.csv(file_path, header = TRUE, sep = ";", fileEncoding = "ISO-8859-1") %>%
     mutate(service_type_abbr = service_abbr, service_category = service_category) %>%
@@ -152,9 +168,6 @@ mapview(funktionella_orter_kommersiell_service, col.regions = "grey", label = "l
 
 
 # ===================== Bredband =============================
-# G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/Bredband
-#PTS_brbkart2021_byggn_korr2.gpkg
-
 bredband_fil <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/Bredband/PTS_brbkart2021_byggn_korr2.gpkg"
 
 st_layers(bredband_fil)
@@ -196,26 +209,18 @@ regionalnod_bredband <- funktionella_orter_bredband %>%
   st_centroid() %>% 
   filter(andel_homes_passed >=60)
 
+# skapar en ny variabel till pop up i Mapview
 regionalnod_bredband$labelText <- paste("Regionalnod bredband definition:", 
                                         "Minst 60 % av byggnader i orten ", 
                                         "har fiber i direkt närhet till fastighet", sep = "<br>") 
-
-# regionalnod_bredband <- regionalnod_bredband %>%
-#   mutate(andel_homes_passed = paste0(round(andel_homes_passed, 1), "%"))
 
 # Visualize on a map
 mapview(funktionella_orter_bredband)+
   mapview(regionalnod_bredband, cex = 10)
 
-
-
-
 # ===================== Offentlig service (sjukvård) ==========
-# Utbudspunkter
-file_path <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/Offentlig_service/Utbudspunkter.csv"
-
 # Läs in data
-sjukvard <- read.csv(file_path, header = TRUE, sep = ";", fileEncoding = "ISO-8859-1")
+sjukvard <- read.csv(sjukvard_fil, header = TRUE, sep = ";", fileEncoding = "ISO-8859-1")
 # Ersätt kommatecken med punkter i koordinatkolumnerna
 sjukvard$Sweref99X <- as.numeric(gsub(",", ".", sjukvard$Sweref99X))
 sjukvard$Sweref99Y <- as.numeric(gsub(",", ".", sjukvard$Sweref99Y))
@@ -250,9 +255,6 @@ sjukvard_aggregates <- sjukvard_in_orter %>%
 
 # Join the aggregates back to the funktionella_orter sf object
 funktionella_orter_sjukvard <- st_join(funktionella_orter, sjukvard_aggregates, by = "unique_id")
-# mapview(funktionella_orter_sjukvard)
-# head(funktionella_orter_sjukvard)
-
 
 regionalnod_sjukhus <- funktionella_orter_sjukvard %>%
   filter(has_SH == TRUE, has_VC == TRUE) %>% 
@@ -270,13 +272,9 @@ mapview(regionalnod_sjukhus, cex = 10)+
   mapview(regionalnod_vardcentral, cex = 6)+
   mapview(funktionella_orter_sjukvard)
 
-
-# ===================== 
-
-
 # ===================== sysselsättning =================
 
-dagbef <- st_read("dag_natt_bef_ruta1km.gpkg") |> 
+dagbef <- st_read(dagbef_fil) |> 
   st_transform(3006) |> 
   st_make_valid()
 
