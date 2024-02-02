@@ -1,4 +1,6 @@
-# noder utanför Dalarna 
+# noder utanför Dalarna, vilken data behövs?
+# kör med tätort och småort koppla dag och natt bef till funktionella tät och små ort först
+
 
 #Ett skript som skapar rumslig strategi
 #Allt snyggt och imponerande nedan är skapat av min bästa kompis GPT4
@@ -38,7 +40,8 @@ offentlig_service_fil <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/
 # Offentlig service (sjukvård, Utbudspunkter)
 sjukvard_fil <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/Offentlig_service/Utbudspunkter.csv"
 # Sysselsättning
-befolkning_fil <- "H:/aldhen/SuperCross/bef_100/100_meters_dag_natt_bef.gpkg"               # ersätt med 100 meterruta
+# befolkning_fil <- "H:/aldhen/SuperCross/bef_100/100_meters_dag_natt_bef.gpkg"               # ersätt med 100 meterruta
+befolkning_fil <- "dag_natt_bef_500.gpkg"
 # grans_dagbef <- 100 
 # Komersiell service nedladdat från Pipos Serviceanalys 2023-03, 8 st CSV-filer
 kom_serv_filer <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/FrånPipos/"
@@ -50,10 +53,13 @@ funktionella_orter <- st_read(funktionella_orter_fil, layer = "funktionella_orte
 names(funktionella_orter)
 funktionella_orter <- funktionella_orter%>% 
   select(!funk_ort.x, !funk_ort.y, priority)
-mapview(funktionella_orter)
-# ============= Rumsligstrategi Handel  =============================================================
 
-# lägg till antal dagligvaror, drivmedel och post samt apotek
+print(length(unique(funktionella_orter$unique_id)))
+# mapview(funktionella_orter)
+
+
+# ============= Rumsligstrategi Handel  (+ apotek, som hör till=============================================================
+# ========== data från Pipos Service analys ===================
 
 # En funktion som läser och konverterar CSV till sf-objekt
 read_and_convert_to_sf <- function(file_path, x_col, y_col, crs, service_abbr, service_category) {
@@ -73,6 +79,12 @@ apotek_sf$service_category <- "apoteksvaror"
 dagligvaror_fullsort_sf$service_category <- "dagligvaror_fullsortiment"
 drivmedel_personbil_sf$service_category <- "drivmedel_personbil"
 posttjanster_sf$service_category <- "posttjänster"
+
+dagligvaror_fullsort_sf$labelText <- "Dagligvaror Fullsortiment"
+drivmedel_personbil_sf$labelText <- "Drivmedel för Personbil"
+posttjanster_sf$labelText <- "Posttjänster"
+apotek_sf$labelText <- "Apotekstjänst"
+
 
 # Combine all individual sf objects into one sf object
 all_services_sf <- bind_rows(
@@ -95,17 +107,27 @@ all_services_in_orter <- all_services_in_orter %>%
             antal.70...10.km,
             trans.behov.70...10.km,
             kortast.rutt.70...10.km))
+# Assuming all_services_in_orter is your combined sf data frame that includes service_category
+
+all_services_in_orter <- all_services_in_orter %>%
+  mutate(klass = case_when(
+    service_category %in% c("dagligvaror_fullsortiment", "drivmedel_personbil", "posttjänster") ~ "handel",
+    service_category == "apoteksvaror" ~ "sjukvard",
+    TRUE ~ service_category # This line might need adjustment
+  ))
+
+
 
 # Aggregate service information
 service_aggregates <- all_services_in_orter %>%
   group_by(unique_id) %>%
   summarise(
-    n_handel = n(),
     sum_dagligvaror = sum(service_category == "dagligvaror_fullsortiment"),
     sum_drivmedel = sum(service_category == "drivmedel_personbil"),
     sum_post = sum(service_category == "posttjänster"),
+    n_handel = sum(klass == "handel"),
     sum_apotek = sum(service_category == "apoteksvaror"),
-    n_unik_typ = n_distinct(service_category)
+    n_sjukvard = sum(klass == "sjukvard")
   )
 # Identify and filter 'funktionella_orter' with at least one of each service type
 
@@ -113,20 +135,28 @@ service_aggregates <- all_services_in_orter %>%
 funktionella_orter_kommersiell_service <- st_join(funktionella_orter, service_aggregates, by = "unique_id")
 
 # 'labelText' är en kolumn i dina sf-objekt som innehåller den text du vill visa i popups
-apotek_sf$labelText <- "Apotekstjänst"
-dagligvaror_fullsort_sf$labelText <- "Dagligvaror Fullsortiment"
-drivmedel_personbil_sf$labelText <- "Drivmedel för Personbil"
-posttjanster_sf$labelText <- "Posttjänster"
-funktionella_orter_kommersiell_service$labelText <- paste("Detta är en funktionell ort. Ett experiment och ett försök att inkludera hela Dalarna, ",
-                                                          "istället för att endast analysera aktivitet i tätorter. Funktionella orter består av tätorter, ",
-                                                          " småorter, fritidshusområden och anläggningsområden", sep = "<br>")
 
-mapview(funktionella_orter_kommersiell_service)+
-  mapview(apotek_sf)+
-  mapview(dagligvaror_fullsort_sf)+
-  mapview(drivmedel_personbil_sf)+
-  mapview(posttjanster_sf)
+# funktionella_orter_kommersiell_service$labelText <- paste("Detta är en funktionell ort. Ett experiment och ett försök att inkludera hela Dalarna, ",
+#                                                           "istället för att endast analysera aktivitet i tätorter. Funktionella orter består av tätorter, ",
+#                                                           " småorter, fritidshusområden och anläggningsområden", sep = "<br>")
+# # # Base map with the first service, specifying color
+# map <- mapview(funktionella_orter_kommersiell_service, col.region = "blue")
+# 
+# # Add additional layers with different colors
+# map <- map + mapview(dagligvaror_fullsort_sf, col.region = "green")
+# map <- map + mapview(drivmedel_personbil_sf, col.region = "red")
+# map <- map + mapview(posttjanster_sf, col.region = "yellow")
+# map <- map + mapview(apotek_sf, col.region = "orange")
+# 
+# # Print the map to display it
+# print(map)
 
+
+funktionella_orter_kommersiell_service <- funktionella_orter_kommersiell_service %>% 
+  rename(unique_id = unique_id.x)
+
+print(length(unique(funktionella_orter_kommersiell_service$unique_id)))
+  
 # ===================== Rumslig strategi sjukvård ==========
 # Läs in data
 sjukvard <- read.csv(sjukvard_fil, header = TRUE, sep = ";", fileEncoding = "ISO-8859-1")
@@ -146,24 +176,41 @@ sjukvard_sf <- sjukvard_sf %>%
 
 # Perform spatial join with funktionella_orter
 sjukvard_in_orter <- st_join(sjukvard_sf, funktionella_orter, join = st_within) %>% 
-  rename(service_category = FghKlass)
+  rename(service_category = FghKlass) 
+
+sjukvard_in_orter <- sjukvard_in_orter %>% 
+  mutate(klass = case_when(
+    service_category %in% c("Vårdcentral", "Sjukhus") ~ "sjukvard",
+    TRUE ~ service_category
+  ))
 
 # Aggregate service information for each funktionell_ort
 # skapa klassificering skola så att det går att köra filter, minst en från klassen utbildning, gör även klassen handel och klassen sjukvard
 sjukvard_aggregates <- sjukvard_in_orter %>%
   group_by(unique_id) %>%
   summarise(
-    n_sjukvard = n(),
     sum_vardcentral = sum(service_category == "Vårdcentral"),
     sum_sjukhus = sum(service_category == "Sjukhus"),
-    n_unik_sjukvard = n_distinct(service_category)
+    n_sjukvard = sum(klass == "sjukvard")
   )
 
 # Join the aggregates back to the funktionella_orter sf object
 funktionella_orter_sjukvard_komserv <- st_join(funktionella_orter_kommersiell_service, sjukvard_aggregates, by = "unique_id")
 
+funktionella_orter_sjukvard_komserv <- funktionella_orter_sjukvard_komserv %>%
+  rowwise() %>%
+  mutate(n_sjukvard = sum(c(sum_apotek, sum_vardcentral, sum_sjukhus), na.rm = TRUE)) %>%
+  ungroup() 
+
+funktionella_orter_sjukvard_komserv <- funktionella_orter_sjukvard_komserv %>%
+   rename(unique_id = unique_id.y.1)
+names(funktionella_orter_sjukvard_komserv)# 
+# funktionella_orter_kommersiell_service <- funktionella_orter_kommersiell_service %>% 
+#   rename(unique_id = unique_id.x)
+
+print(length(unique(funktionella_orter_sjukvard_komserv$unique_id)))
+
 mapview(sjukvard_aggregates)+
-  mapview(funktionella_orter_sjukvard)+
   mapview(funktionella_orter_sjukvard_komserv)
 
 # ===================================== hämta data från enhetsregistret ================
@@ -206,190 +253,92 @@ all_schools_sf <- bind_rows(
 all_schools_sf <- st_as_sf(all_schools_sf)
 
 # Utför spatial join med funktionella_orter
-all_schools_in_orter <- st_join(all_schools_sf, funktionella_orter, join = st_within)
+all_schools_in_orter <- st_join(all_schools_sf, funktionella_orter, join = st_within)%>% 
+  mutate(klass = case_when(
+    service_category %in% c("Grundskola", "Gymnasieskola", "Högskola") ~ "utbildning",
+    TRUE ~ service_category
+  ))
 
-mapview(all_schools_in_orter, zcol = "typ_service")+
-  mapview(funktionella_orter)
+# mapview(all_schools_in_orter, zcol = "typ_service")+
+#   mapview(funktionella_orter)
 
 # Aggregera skolinformation för varje funktionell ort
 # skapa klassificering skola så att det går att köra filter, minst en från klassen utbildning, gör även klassen handel och klassen sjukvard
 school_aggregates <- all_schools_in_orter %>%
   group_by(unique_id) %>%
   summarise(
-    n_utbildning = n(),
     sum_grundskola = sum(service_category == "Grundskola"),
     sum_gymnasieskola = sum(service_category == "Gymnasieskola"),
     sum_hogskola = sum(service_category == "Högskola"),  
-    n_unik_skoltyp = n_distinct(service_category)
+    n_skola = sum(klass == "utbildning")
   )
 # Join the aggregates back to the funktionella_orter sf object
 funktionella_orter_skola_sjukv_komserv <- st_join(funktionella_orter_sjukvard_komserv, school_aggregates, by = "unique_id")
-mapview(funktionella_orter_skola_sjukv_komserv)+
-  mapview(all_schools_sf, zcol = "service_category")
+# mapview(funktionella_orter_skola_sjukv_komserv)+
+#   mapview(all_schools_sf, zcol = "service_category")
 
 # ===================== sysselsättning =================
-# läs in 100 metersruta istället
-
-befolkning <- st_read(befolkning_fil) |> 
-  st_transform(3006) |> 
-  st_make_valid()
-
-#make centroids
-dagbef_centroids <- befolkning %>% 
-  select(!natt_bef) %>% 
-  st_centroid()
-mapview(dagbef_centroids, cex = "dag_bef")
-
-funktionella_orter_skola_sjukv_komserv <- funktionella_orter_skola_sjukv_komserv %>% 
-  select(unique_id = unique_id.x, !unique_id.x.1, !unique_id.y, !unique_id.y.1)
-
-sysselsattning <- st_join(dagbef_centroids, funktionella_orter_skola_sjukv_komserv, join = st_within)
-
-# Summarize workforce data for each area
-sum_sysselsattning <- sysselsattning %>%
-  group_by(unique_id) %>%  # Replace 'area_id' with the identifier for your areas of interest
-  summarise(sum_dagbef = sum(dag_bef, na.rm = TRUE))
-
-# Convert to a regular dataframe if it's an sf object
-sum_sysselsattning_df <- as.data.frame(sum_sysselsattning)
-
-funktionella_orter_syss_komserv_skola_sjukvard <- funktionella_orter_skola_sjukv_komserv %>%
-  left_join(sum_sysselsattning_df, by = "unique_id") %>%
-  mutate(sum_dagbef = ifelse(is.na(sum_dagbef), NA, sum_dagbef))
-mapview(funktionella_orter_syss_komserv_skola_sjukvard)
-
-nattbef_centroids <- befolkning %>% 
-  select(!dag_bef) %>% 
-  st_centroid()
-
-natt_befolkning <- st_join(nattbef_centroids, funktionella_orter_syss_komserv_skola_sjukvard, join = st_within)
-
-# Summarize workforce data for each area
-sum_natt_bef <- natt_befolkning %>%
-  group_by(unique_id) %>%  # Replace 'area_id' with the identifier for your areas of interest
-  summarise(sum_nattbef = sum(natt_bef, na.rm = TRUE))
-
-# Convert to a regular dataframe if it's an sf object
-sum_natt_befolkning_df <- as.data.frame(sum_natt_bef)
-
-funktionella_orter_nattbef_syss_sjukv_skola_komserv <- funktionella_orter_syss_komserv_skola_sjukvard %>%
-  left_join(sum_natt_befolkning_df, by = "unique_id") %>%
-  mutate(sum_nattbef = ifelse(is.na(sum_nattbef), NA, sum_nattbef))
-mapview(funktionella_orter_nattbef_syss_sjukv_skola_komserv)
-
-noder_dalarna <- funktionella_orter_nattbef_syss_sjukv_skola_komserv
-
+# # läs in 100 metersruta istället
+# 
+# befolkning <- st_read(befolkning_fil) |> 
+#   st_transform(3006) |> 
+#   st_make_valid()
+# mapview(befolkning)
+# 
+# #make centroids
+# dagbef_centroids <- befolkning %>% 
+#   select(!natt_bef) %>% 
+#   st_centroid()
+# 
+# # mapview(dagbef_centroids, cex = "dag_bef")+
+# #   mapview(befolkning)
+# # 
+# # funktionella_orter_skola_sjukv_komserv <- funktionella_orter %>% 
+# #   select(unique_id = unique_id.x, !unique_id.y,)
+# 
+# # Check for duplicate geometries
+# 
+# sysselsattning <- st_join(dagbef_centroids, funktionella_orter_skola_sjukv_komserv, join = st_within)
+# 
+# # Summarize workforce data for each area
+# sum_sysselsattning <- sysselsattning %>%
+#   group_by(unique_id) %>%  # Replace 'area_id' with the identifier for your areas of interest
+#   summarise(sum_dagbef = sum(dag_bef, na.rm = TRUE))
+# 
+# # Convert to a regular dataframe if it's an sf object
+# sum_sysselsattning_df <- as.data.frame(sum_sysselsattning)
+# 
+# funktionella_orter_syss_komserv_skola_sjukvard <- funktionella_orter_skola_sjukv_komserv %>%
+#   left_join(sum_sysselsattning_df, by = "unique_id") %>%
+#   mutate(sum_dagbef = ifelse(is.na(sum_dagbef), NA, sum_dagbef))
+# # mapview(funktionella_orter_syss_komserv_skola_sjukvard)
+# 
+# nattbef_centroids <- befolkning %>% 
+#   select(!dag_bef) %>% 
+#   st_centroid()
+# 
+# natt_befolkning <- st_join(nattbef_centroids, funktionella_orter_syss_komserv_skola_sjukvard, join = st_within)
+# 
+# # Summarize workforce data for each area
+# sum_natt_bef <- natt_befolkning %>%
+#   group_by(unique_id) %>%  # Replace 'area_id' with the identifier for your areas of interest
+#   summarise(sum_nattbef = sum(natt_bef, na.rm = TRUE))
+# 
+# # Convert to a regular dataframe if it's an sf object
+# sum_natt_befolkning_df <- as.data.frame(sum_natt_bef)
+# 
+# funktionella_orter_nattbef_syss_sjukv_skola_komserv <- funktionella_orter_syss_komserv_skola_sjukvard %>%
+#   left_join(sum_natt_befolkning_df, by = "unique_id") %>%
+#   mutate(sum_nattbef = ifelse(is.na(sum_nattbef), NA, sum_nattbef))
+# # mapview(funktionella_orter_nattbef_syss_sjukv_skola_komserv)
+# 
+# noder_dalarna <- funktionella_orter_nattbef_syss_sjukv_skola_komserv
+noder_dalarna <- funktionella_orter_skola_sjukv_komserv
 
 #skapa poängsättning
 # 3 poäng för sjukvard; sjukhus, vårdcentral och apotek
 # 3 poäng för skola; högskola, gymnasium och grundskola
 # 3 poäng för handel; drivmedel, dagligvaror, post
-
-
-# storregionalnod <- Falun och Borlänge (eller minst sjukhus)
-
-storregionalnod <- noder_dalarna %>%
-  filter(sum_drivmedel >= 1, 
-         sum_post >= 1, 
-         sum_dagligvaror >= 1, 
-         sum_sjukhus >= 1, 
-         sum_vardcentral >= 1,
-         sum_apotek >= 1,
-         sum_grundskola >= 1,
-         sum_gymnasieskola >= 1,
-         sum_hogskola >= 1) %>%
-  st_centroid()
-
-mapview(storregionalnod)
-
-#skapa ett reverserat urval (!=) som gör att storregionalnod (raden/observationen) försvinner från funktionella_orter_utan_storregionalnod
-# så att nästa ser ut som följande
-# Assuming storregionalnod and noder_dalarna both have a column named unique_id
-
-# To exclude storregionalnod from noder_dalarna
-funktionella_orter_utan_storregionalnod <- anti_join(noder_dalarna, storregionalnod, by = "unique_id")
-
-# regionalnod <- funktionella_orter_utan_storregionalnod %>% 
-#   xxxx
-
-# minst servicegrad 9
-regionalnod <- noder_dalarna %>%
-  filter(sum_drivmedel >= 1, 
-         sum_post >= 1, 
-         sum_dagligvaror >= 1, 
-         sum_vardcentral >= 1,
-         sum_apotek >= 1,
-         sum_grundskola >= 1,
-         sum_gymnasieskola >= 1,
-         n_utbildning >= 3,
-         n_handel >= 3,
-         n_sjukvard >=3) %>% #är apoteken med här i klassen n_sjukvard?
-  # servicegrad >= 9
-  st_centroid()
-
-mapview(regionalnod)+
-  mapview(storregionalnod)
-
-# delregionalnod <- servicegrad 6 minst gymnasium, minst vårdcentral, minst dagligvaror
-delregionalnod <- noder_dalarna %>% 
-  filter(sum_dagligvaror >= 1, 
-         sum_vardcentral >= 1,
-         sum_gymnasieskola >= 1,
-         n_utbildning >= 2,
-         n_handel >= 2,
-         n_sjukvard >= 2) %>% 
-  # servicegrad >= 6
-  st_centroid()
-
-mapview(delregionalnod)+
-  mapview(regionalnod)+
-  mapview(storregionalnod)
-
-# närgeografisknod <- "Ort med servicegrad om minst 3 utifrån handel, vård eller utbildning ( en av varje). Har en 
-# relativt hög andel arbetstillfällen (kvot över 20 procent utifrån befolkning)"
-nargeografisknod <- noder_dalarna %>%
-  # Lägg till en ny kolumn för kvoten mellan arbetsplatser och befolkning
-  mutate(kvot_arbetsplatser_befolkning = sum_dagbef / befolkning) %>% # ändra till nattbef
-  # Filtrera baserat på den nya kvoten
-  filter(kvot_arbetsplatser_befolkning >= 0.20) %>%
-  filter(n_utbildning >= 1,
-         n_handel >= 1,
-         n_sjukvard >=1)
-# servicegrad >= 3
-
-mapview(nargeografisknod)+
-  mapview(delregionalnod)+
-  mapview(regionalnod)+
-  mapview(storregionalnod)
-
-# boendeortmed viss service <- En boendeort med en servicegrad om minst 3( en av varje).
-boendeort_service <- noder_dalarna %>%
-  filter(n_utbildning >= 1,
-         n_handel >= 1,
-         n_sjukvard >=1)
-# servicegrad >= 3
-
-mapview(boendeort_service)+
-  mapview(nargeografisknod)+
-  mapview(delregionalnod)+
-  mapview(regionalnod)+
-  mapview(storregionalnod)
-
-# boendeort med minst 200 personer i nattbef
-boendeort <- noder_dalarna %>% 
-  filter(nattbef >= 200)
-
-mapview(boendeort, col.regions = "darkred", cex = 3)+
-  mapview(boendeort_service, col.regions = "yellow", cex = 5)+
-  mapview(nargeografisknod, col.regions = "darkblue", cex = 7)+
-  mapview(delregionalnod, col.regions = "pink", cex = 12)+
-  mapview(regionalnod, col.regions = "red", cex = 16)+
-  mapview(storregionalnod, col.regions = "red", cex = 20)
-
-library(dplyr)
-library(sf)
-# Assuming mapview is also used
-library(mapview)
 
 # Initial step: Identify storregionalnod based on service criteria
 storregionalnod <- noder_dalarna %>%
@@ -403,16 +352,16 @@ storregionalnod <- noder_dalarna %>%
          sum_gymnasieskola >= 1,
          sum_hogskola >= 1) %>%
   st_centroid()
+# 
+# mapview(storregionalnod)
 
-mapview(storregionalnod)
-
-# Exclude storregionalnod from noder_dalarna for the next step
-exclude_ids <- storregionalnod$unique_id
-noder_dalarna_filtered1 <- noder_dalarna %>%
-  filter(!(unique_id %in% exclude_ids))
+# # Exclude storregionalnod from noder_dalarna for the next step
+# exclude_ids <- storregionalnod$unique_id
+# noder_dalarna_filtered1 <- noder_dalarna %>%
+#   filter(!(unique_id %in% exclude_ids))
 
 # Step 2: Identify regionalnod
-regionalnod <- noder_dalarna_filtered1 %>%
+regionalnod <- noder_dalarna %>%
   filter(sum_drivmedel >= 1, 
          sum_post >= 1, 
          sum_dagligvaror >= 1, 
@@ -420,81 +369,85 @@ regionalnod <- noder_dalarna_filtered1 %>%
          sum_apotek >= 1,
          sum_grundskola >= 1,
          sum_gymnasieskola >= 1,
-         n_utbildning >= 3,
+         n_skola >= 3,
          n_handel >= 3,
          n_sjukvard >=3) %>%
   st_centroid()
 
-mapview(regionalnod) + mapview(storregionalnod)
+# mapview(regionalnod) + mapview(storregionalnod)
 
-# Update the exclusion list and filter noder_dalarna again
-exclude_ids <- c(exclude_ids, regionalnod$unique_id)
-noder_dalarna_filtered2 <- noder_dalarna %>%
-  filter(!(unique_id %in% exclude_ids))
+# # Update the exclusion list and filter noder_dalarna again
+# exclude_ids <- c(exclude_ids, regionalnod$unique_id)
+# noder_dalarna_filtered2 <- noder_dalarna %>%
+#   filter(!(unique_id %in% exclude_ids))
 
 # Step 3: Identify delregionalnod
-delregionalnod <- noder_dalarna_filtered2 %>%
-  filter(sum_dagligvaror >= 1, 
-         sum_vardcentral >= 1,
-         sum_gymnasieskola >= 1,
-         n_utbildning >= 2,
+delregionalnod <- noder_dalarna %>%
+  filter(
+    # sum_dagligvaror >= 1,
+    #      sum_vardcentral >= 1,
+    #      sum_gymnasieskola >= 1,
+         n_skola >= 2,
          n_handel >= 2,
          n_sjukvard >= 2) %>%
   st_centroid()
 
-mapview(delregionalnod, col.regions = "blue") + 
-  mapview(regionalnod, col.regions = "red") + 
-  mapview(storregionalnod, col.regions = "green")
+# mapview(delregionalnod, col.regions = "blue") + 
+#   mapview(regionalnod, col.regions = "red") + 
+#   mapview(storregionalnod, col.regions = "green")
 
-# Update the exclusion list and filter noder_dalarna again
-exclude_ids <- c(exclude_ids, delregionalnod$unique_id)
-noder_dalarna_filtered3 <- noder_dalarna %>%
-  filter(!(unique_id %in% exclude_ids))
+# # Update the exclusion list and filter noder_dalarna again
+# exclude_ids <- c(exclude_ids, delregionalnod$unique_id)
+# noder_dalarna_filtered3 <- noder_dalarna %>%
+#   filter(!(unique_id %in% exclude_ids))
 
 # Step 4: Identify nargeografisknod
-nargeografisknod <- noder_dalarna_filtered3 %>%
-  mutate(kvot_arbetsplatser_befolkning = sum_dagbef / befolkning) %>%
-  filter(kvot_arbetsplatser_befolkning >= 0.20) %>%
-  filter(n_utbildning >= 1,
+nargeografisknod <- noder_dalarna %>%
+  # mutate(kvot_arbetsplatser_befolkning = sum_dagbef / befolkning) %>%
+  # filter(kvot_arbetsplatser_befolkning >= 0.20) %>%
+  filter(n_skola >= 1,
          n_handel >= 1,
          n_sjukvard >=1) %>%
   st_centroid()
 
-mapview(delregionalnod, col.regions = "blue") + 
-  mapview(regionalnod, col.regions = "red") + 
-  mapview(storregionalnod, col.regions = "green")+
-  mapview(nargeografisknod)
-# Update the exclusion list and filter noder_dalarna again
-exclude_ids <- c(exclude_ids, nargeografisknod$unique_id)
-noder_dalarna_filtered4 <- noder_dalarna %>%
-  filter(!(unique_id %in% exclude_ids))
+# mapview(delregionalnod, col.regions = "blue") + 
+#   mapview(regionalnod, col.regions = "red") + 
+#   mapview(storregionalnod, col.regions = "green")+
+#   mapview(nargeografisknod)
+# # Update the exclusion list and filter noder_dalarna again
+# exclude_ids <- c(exclude_ids, nargeografisknod$unique_id)
+# noder_dalarna_filtered4 <- noder_dalarna %>%
+#   filter(!(unique_id %in% exclude_ids))
 
 # Step 5: Identify boendeort_service and boendeort
-boendeort_service <- noder_dalarna_filtered4 %>%
-  filter(n_utbildning >= 1,
-         n_handel >= 1) %>% 
+boendeort_service <- noder_dalarna %>%
+  filter(
+    # n_skola >= 1,
+         n_handel >= 1,
+         befolkning >= 200) %>% 
   st_centroid()
 
-mapview(delregionalnod, col.regions = "blue") + 
-  mapview(regionalnod, col.regions = "red") + 
-  mapview(storregionalnod, col.regions = "green") +
-  mapview(nargeografisknod, col.regions = "orange") +
-  mapview(boendeort_service, col.regions = "yellow") # Corrected parameter
-
-exclude_ids <- c(exclude_ids, boendeort_service$unique_id)
-noder_dalarna_filtered5 <- noder_dalarna %>%
-  filter(!(unique_id %in% exclude_ids))
+# mapview(delregionalnod, col.regions = "blue") + 
+#   mapview(regionalnod, col.regions = "red") + 
+#   mapview(storregionalnod, col.regions = "green") +
+#   mapview(nargeografisknod, col.regions = "orange") +
+#   mapview(boendeort_service, col.regions = "yellow") # Corrected parameter
+# 
+# exclude_ids <- c(exclude_ids, boendeort_service$unique_id)
+# noder_dalarna_filtered5 <- noder_dalarna %>%
+#   filter(!(unique_id %in% exclude_ids))
 # Assuming there's a separate step or criteria for identifying boendeort
 # Adjust the filtering criteria as necessary for your analysis
-boendeort <- noder_dalarna_filtered5 %>%
-  filter(sum_nattbef >= 200) %>% 
+boendeort <- noder_dalarna %>%
+  filter(befolkning >= 100) %>% 
   st_centroid()
 
-mapview(delregionalnod, col.regions = "blue") + 
-  mapview(regionalnod, col.regions = "red") + 
-  mapview(storregionalnod, col.regions = "green") +
-  mapview(nargeografisknod, col.regions = "orange") +
-  mapview(boendeort_service, col.regions = "yellow") +
-  mapview(boendeort, col.regions = "black")# Corrected parameter
+mapview(funktionella_orter_skola_sjukv_komserv, alpha.regions = 0.3)+
+  mapview(storregionalnod, col.regions = "green", cex = 25) + 
+  mapview(regionalnod, col.regions = "red", cex = 20) + 
+  mapview(delregionalnod, col.regions = "blue", cex = 15)+
+  mapview(nargeografisknod, col.regions = "orange", cex = 10) +
+  mapview(boendeort_service, col.regions = "yellow", cex = 6) +
+  mapview(boendeort, col.regions = "black", cex = 3)# Corrected parameter
 
 
