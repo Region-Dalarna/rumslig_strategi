@@ -1,6 +1,6 @@
 #Ett skript som skapar regional noder
 #Allt snyggt och imponerande nedan är skapat av min bästa kompis GPT4
-
+# 
 # libraries
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(tidyverse, 
@@ -65,125 +65,10 @@ dagbef_fil <- "data/dag_natt_bef_ruta1km.gpkg"               # ersätt med 100 m
 grans_dagbef <- 100 
 
 
-# =============== Analysen Funktionella orter ==========================
 
-smaort <- st_read(paste0(omr_fil, smaort), crs = 3006)
-smaort_layer <- smaort |> 
-  filter(LANSNAMN == "Dalarna")
+st_layers("data/funktionella_orter.gpkg")
 
-#st_layers(paste0(fil, tatort))
-tatort_layer <- st_read(paste0(omr_fil, tatort), layer = "To2020_SR99TM", crs = 3006)
-tatort_layer <- tatort_layer |> 
-  dplyr::filter(LAN == "20")
-
-fritid_layer <- st_read(paste0(omr_fil, fritid_omr), crs = 3006)
-fritid_layer <- fritid_layer |> 
-  dplyr::filter(LANSNAMN == "Dalarna")
-
-anlag_omr_path <- paste0(fil_anl, anlag_omr)
-st_layers(anlag_omr_path)
-anlag_layer <- st_read(anlag_omr_path, layer = "anlaggningsomrade", crs = 3006)
-
-# Buffra varje lager
-tatort_buffer <- st_buffer(tatort_layer, dist = buffer)    # inställningar finns uppe vid filsökvägar
-smaort_buffer <- st_buffer(smaort_layer, dist = buffer)
-fritid_buffer <- st_buffer(fritid_layer, dist = buffer)
-anlag_buffer <- st_buffer(anlag_layer, dist = buffer)
-
-# Lägg till prioritet
-tatort_buffer$priority <- 1
-smaort_buffer$priority <- 2
-fritid_buffer$priority <- 3
-anlag_buffer$priority <- 4
-
-# fixar kolumner så att alla lager ser lika ut i uppsättningen  
-
-funk_tatort <- tatort_buffer |> 
-  dplyr::select(TATORTSKOD, TATORT, KOMMUNNAMN, KOMMUN, BEF, geom, priority) |> 
-  rename(namn = TATORT, 
-         kod = TATORTSKOD, 
-         kommun = KOMMUN, 
-         kommunnamn = KOMMUNNAMN, 
-         befolkning = BEF) |> 
-  mutate(omr = "Tätort")
-
-funk_smaort <- smaort_buffer |> 
-  dplyr::select(SMAORT, KOMMUNNAMN, KOMMUNKOD, BEF, geometry, priority) |> 
-  rename(kod = SMAORT, 
-         kommun = KOMMUNKOD, 
-         kommunnamn = KOMMUNNAMN, 
-         befolkning = BEF,
-         geom = geometry) |> 
-  mutate(namn = NA, omr = "Småort")
-
-funk_fritid <- fritid_buffer |> 
-  dplyr::select(FRITIDSHUS, KOMMUNNAMN, KOMMUNKOD, geometry, priority) |> 
-  rename(kod = FRITIDSHUS, 
-         kommun = KOMMUNKOD, 
-         kommunnamn = KOMMUNNAMN,
-         geom = geometry) |> 
-  mutate(befolkning = NA, namn = NA, omr = "Fritidshusområde")
-
-funk_anlag <- anlag_buffer |> 
-  dplyr::select(objekttyp, andamal, geom, priority) |> 
-  mutate(namn = paste(objekttyp, andamal, sep = ", ")) |>
-  select(namn, geom, priority) |>
-  mutate(befolkning = NA, kommun = NA, kommunnamn = NA, kod = NA, omr = "Anläggningsområde")
-
-standard_order <- c("omr", "kod", "namn", "kommunnamn", "kommun", "befolkning", "priority", "geom")
-
-funk_anlag <- funk_anlag[standard_order]
-funk_smaort <- funk_smaort[standard_order]
-funk_tatort <- funk_tatort[standard_order]
-funk_fritid <- funk_fritid[standard_order]
-
-funk_ort <- rbind(funk_tatort, funk_smaort, funk_fritid, funk_anlag) |> 
-  mutate(funk_ort= "funk_ort")
-
-funk_ort_diss <- funk_ort %>%
-  st_make_valid() %>%
-  group_by(funk_ort) %>%
-  summarize(geom = st_union(geom))
-
-# Antag att funk_ort_diss är ditt multipolygon-objekt
-# Dela upp multipolygonen till enskilda polygoner
-single_polygons <- st_cast(funk_ort_diss, "POLYGON")
-
-# Skapa centroider för funk_ort
-funk_ort_centroids <- st_centroid(funk_ort)
-
-# Step 1: Spatial Join
-joined_data <- st_join(single_polygons, funk_ort_centroids)
-
-# Step 2 & 3: Sorting and Filtering
-# Assuming 'priority' and 'population' are the column names in 'centroids'
-processed_data <- joined_data %>%
-  arrange(priority, desc(befolkning)) %>%
-  group_by(geom) %>%
-  slice(1) %>%
-  ungroup()
-
-# Step 4: Cleanup
-# Removing duplicates and keeping necessary columns
-final_data <- processed_data %>%
-  distinct(geom, .keep_all = TRUE)
-
-# Adding a unique ID column to the final data
-final_data_with_id <- final_data %>%
-  mutate(unique_id = row_number())
-
-funktionella_orter <- final_data_with_id
-
-
-#funktionella_orter <- st_read("funktionella_orter_fil", crs = 3006) 
-
-funktionella_orter <- funktionella_orter%>% 
-  select(!funk_ort.y) %>% 
-  rename(funk_ort = funk_ort.x, namn_ort = namn)
-
-
-st_write(funktionella_orter, "funktionella_orter.gpkg", layer = "funktionella_orter_clean", driver = "GPKG")
-
+funktionella_orter <- st_read("data/funktionella_orter.gpkg", layer = "funktionella_orter", crs = 3006) 
 # ============= Analys Komersiell service =============================================================
 
 # Definition: Kommersiell service samt en annan grundläggande service på platsen.   
@@ -277,16 +162,16 @@ regionalnod_kommersiell_service$labelText <- paste("Regionalnod definition: Komm
                                                    "Med annan grundläggande service menas post-och pakettjänster, kontantuttag, betaltjänster eller",
                                                    "dagskassehantering, samt ombudstjänster för apoteksvaror.", sep = "<br>")
 
-mapview(funktionella_orter_kommersiell_service, col.regions = "grey", label = "labelText", layer.name = "Funktionella Orter", homebutton = FALSE) +
-  mapview(regionalnod_kommersiell_service, col.regions = "black", cex = 20, alpha.regions = 0.2, label = "labelText", layer.name = "Regionalnoder komersiell service", homebutton = FALSE) +
-  mapview(apotek_sf, col.regions = "blue", label = "labelText", layer.name = "Apotek", homebutton = FALSE) +
-  mapview(betalnings_formedling_sf, col.regions = "red", label = "labelText", layer.name = "Betalningsformedling", homebutton = FALSE) +
-  mapview(dagkasse_insattning_sf, col.regions = "green", label = "labelText", layer.name = "Dagkasseinsattning", homebutton = FALSE) +
-  mapview(dagligvaror_EJ_fullsort_sf, col.regions = "yellow", label = "labelText", layer.name = "Dagligvaror Ej Fullsortiment", homebutton = FALSE) +
-  mapview(dagligvaror_fullsort_sf, col.regions = "purple", label = "labelText", layer.name = "Dagligvaror Fullsortiment", homebutton = FALSE) +
-  mapview(drivmedel_personbil_sf, col.regions = "orange", label = "labelText", layer.name = "Drivmedel Personbil", homebutton = FALSE) +
-  mapview(posttjanster_sf, col.regions = "brown", label = "labelText", layer.name = "Posttjanster", homebutton = FALSE) +
-  mapview(uttagsautomat_sf, col.regions = "pink", label = "labelText", layer.name = "Uttagsautomat", homebutton = FALSE)
+# mapview(funktionella_orter_kommersiell_service, col.regions = "grey", label = "labelText", layer.name = "Funktionella Orter", homebutton = FALSE) +
+#   mapview(regionalnod_kommersiell_service, col.regions = "black", cex = 20, alpha.regions = 0.2, label = "labelText", layer.name = "Regionalnoder komersiell service", homebutton = FALSE) +
+#   mapview(apotek_sf, col.regions = "blue", label = "labelText", layer.name = "Apotek", homebutton = FALSE) +
+#   mapview(betalnings_formedling_sf, col.regions = "red", label = "labelText", layer.name = "Betalningsformedling", homebutton = FALSE) +
+#   mapview(dagkasse_insattning_sf, col.regions = "green", label = "labelText", layer.name = "Dagkasseinsattning", homebutton = FALSE) +
+#   mapview(dagligvaror_EJ_fullsort_sf, col.regions = "yellow", label = "labelText", layer.name = "Dagligvaror Ej Fullsortiment", homebutton = FALSE) +
+#   mapview(dagligvaror_fullsort_sf, col.regions = "purple", label = "labelText", layer.name = "Dagligvaror Fullsortiment", homebutton = FALSE) +
+#   mapview(drivmedel_personbil_sf, col.regions = "orange", label = "labelText", layer.name = "Drivmedel Personbil", homebutton = FALSE) +
+#   mapview(posttjanster_sf, col.regions = "brown", label = "labelText", layer.name = "Posttjanster", homebutton = FALSE) +
+#   mapview(uttagsautomat_sf, col.regions = "pink", label = "labelText", layer.name = "Uttagsautomat", homebutton = FALSE)
 
 # ===================== Bredband =============================
 
@@ -301,7 +186,7 @@ bredband <- bredband %>%
   select(ANDAMAL_1T, uuid, kommunkod, tatortkod_21, smaortkod_15, hus_antal, arb_antal, fritidshus, fiber_absnarhet, fiber)|>
   st_make_valid()
 
-mapview(bredband, zcol = "fiber_absnarhet")
+# mapview(bredband, zcol = "fiber_absnarhet")
 
 # If necessary, create centroids for buildings data (if they're not already centroids)
 buildings_centroids <- st_centroid(bredband)
@@ -344,9 +229,30 @@ sjukvard_filtered <- sjukvard %>%
 
 sjukvard_sf <- sjukvard_filtered %>%
   st_as_sf(coords = c("Sweref99Y", "Sweref99X"), crs = 3006, agr = "constant")
+# skapa separata sf_objekt från kolumnen FghKlass
+NULL_sf <- sjukvard_sf %>% 
+  filter(FghKlass == "NULL")
+
+blank_sf <- sjukvard_sf %>% 
+  filter(FghKlass == "")
+
+vardcentral_sf <- sjukvard_sf %>% 
+  filter(FghKlass == "Vårdcentral")
+
+sjukhus_sf <- sjukvard_sf %>% 
+  filter(FghKlass == "Sjukhus")
+
+mapview(blank_sf, col.regions = "darkred", hide = TRUE)+
+  mapview(NULL_sf, col.regions = "red", hide = TRUE)+
+  mapview(vardcentral_sf, col.regions = "green")+
+  mapview(sjukhus_sf, col.regions = "darkgreen")
+  
 
 sjukvard_sf <- sjukvard_sf %>% 
   filter(!is.na(FghKlass))
+
+sjukvard_sf <- sjukvard_sf %>% 
+  filter(FghKlass != "NULL")
 
 # Perform spatial join with funktionella_orter
 sjukvard_in_orter <- st_join(sjukvard_sf, funktionella_orter, join = st_within)
@@ -378,6 +284,9 @@ regionalnod_vardcentral <- funktionella_orter_sjukvard %>%
 
 regionalnod_vardcentral$labelText <- paste("Regional nod Vårdcentral definition:","Platser med Vårdcentral", sep = "<br>")
 
+mapview(regionalnod_sjukhus, col.regions = "darkgreen", cex = 15, alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1, hide = TRUE)+
+     mapview(regionalnod_vardcentral, col.regions = "chartreuse1", cex = 10, alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1, hide = TRUE)+
+  mapview(sjukvard_sf, zcol = "FghKlass", label = "FghKlass", homebutton = FALSE)
 # ===================== sysselsättning =================
 
 dagbef <- st_read(dagbef_fil) |> 
@@ -420,26 +329,26 @@ regionalnod_sysselsattning$labelText <- paste("Regional nod sysselsättning defi
 center <- st_coordinates(st_centroid(st_union(funktionella_orter_final)))[1, ]
 zoom <- 20
 
-mapview(funktionella_orter_final, center = center, zoom = zoom)
-
-mapview(funktionella_orter_final, col.regions = "lightblue", alpha.regions = 0.2, label = "labelText", homebutton = FALSE, layer.name = "Funktionella orter", lwd = 1)+
-  mapview(regionalnod_sjukhus, col.regions = "chartreuse4", cex = 25, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
-  mapview(regionalnod_vardcentral, col.regions = "chartreuse1", cex = 20, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
-  mapview(regionalnod_kommersiell_service, col.regions = "gold1", cex = 15, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
-  mapview(regionalnod_bredband, col.regions = "orange2", cex = 10, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
-  mapview(regionalnod_sysselsattning, col.regions = "red4", cex = 5, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
-  mapview(apotek_sf, col.regions = "blueviolet", label = "labelText", layer.name = "Apotek", homebutton = FALSE, hide = TRUE) +
-  mapview(betalnings_formedling_sf, col.regions = "darkorchid1", label = "labelText", layer.name = "Betalningsformedling", homebutton = FALSE, hide = TRUE) +
-  mapview(dagkasse_insattning_sf, col.regions = "lightsalmon2", label = "labelText", layer.name = "Dagkasseinsattning", homebutton = FALSE, hide = TRUE) +
-  mapview(dagligvaror_EJ_fullsort_sf, col.regions = "deeppink4", label = "labelText", layer.name = "Dagligvaror Ej Fullsortiment", homebutton = FALSE, hide = TRUE) +
-  mapview(dagligvaror_fullsort_sf, col.regions = "lightslateblue", label = "labelText", layer.name = "Dagligvaror Fullsortiment", homebutton = FALSE, hide = TRUE) +
-  mapview(drivmedel_personbil_sf, col.regions = "deeppink", label = "labelText", layer.name = "Drivmedel Personbil", homebutton = FALSE, hide = TRUE) +
-  mapview(posttjanster_sf, col.regions = "brown", label = "labelText", layer.name = "Posttjanster", homebutton = FALSE, hide = TRUE) +
-  mapview(uttagsautomat_sf, col.regions = "pink", label = "labelText", layer.name = "Uttagsautomat", homebutton = FALSE, hide = TRUE)+
-  mapview(smaort_layer, col.regions = "cyan2", hide = TRUE, homebutton = FALSE, layer.name = "Smaorter") + 
-  mapview(tatort_layer, col.regions = "cyan4", hide = TRUE, homebutton = FALSE, layer.name = "Tatorter") + 
-  mapview(fritid_layer, col.regions = "cyan1", hide = TRUE, homebutton = FALSE, layer.name = "Fritidshusomrade") + 
-  mapview(anlag_layer, col.regions = "cyan3", hide = TRUE, homebutton = FALSE, layer.name = "Anlaggningsomrade")
+# mapview(funktionella_orter_final, center = center, zoom = zoom)
+# 
+# mapview(funktionella_orter_final, col.regions = "lightblue", alpha.regions = 0.2, label = "labelText", homebutton = FALSE, layer.name = "Funktionella orter", lwd = 1)+
+#   mapview(regionalnod_sjukhus, col.regions = "chartreuse4", cex = 25, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
+#   mapview(regionalnod_vardcentral, col.regions = "chartreuse1", cex = 20, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
+#   mapview(regionalnod_kommersiell_service, col.regions = "gold1", cex = 15, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
+#   mapview(regionalnod_bredband, col.regions = "orange2", cex = 10, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
+#   mapview(regionalnod_sysselsattning, col.regions = "red4", cex = 5, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
+#   mapview(apotek_sf, col.regions = "blueviolet", label = "labelText", layer.name = "Apotek", homebutton = FALSE, hide = TRUE) +
+#   mapview(betalnings_formedling_sf, col.regions = "darkorchid1", label = "labelText", layer.name = "Betalningsformedling", homebutton = FALSE, hide = TRUE) +
+#   mapview(dagkasse_insattning_sf, col.regions = "lightsalmon2", label = "labelText", layer.name = "Dagkasseinsattning", homebutton = FALSE, hide = TRUE) +
+#   mapview(dagligvaror_EJ_fullsort_sf, col.regions = "deeppink4", label = "labelText", layer.name = "Dagligvaror Ej Fullsortiment", homebutton = FALSE, hide = TRUE) +
+#   mapview(dagligvaror_fullsort_sf, col.regions = "lightslateblue", label = "labelText", layer.name = "Dagligvaror Fullsortiment", homebutton = FALSE, hide = TRUE) +
+#   mapview(drivmedel_personbil_sf, col.regions = "deeppink", label = "labelText", layer.name = "Drivmedel Personbil", homebutton = FALSE, hide = TRUE) +
+#   mapview(posttjanster_sf, col.regions = "brown", label = "labelText", layer.name = "Posttjanster", homebutton = FALSE, hide = TRUE) +
+#   mapview(uttagsautomat_sf, col.regions = "pink", label = "labelText", layer.name = "Uttagsautomat", homebutton = FALSE, hide = TRUE)+
+#   mapview(smaort_layer, col.regions = "cyan2", hide = TRUE, homebutton = FALSE, layer.name = "Smaorter") + 
+#   mapview(tatort_layer, col.regions = "cyan4", hide = TRUE, homebutton = FALSE, layer.name = "Tatorter") + 
+#   mapview(fritid_layer, col.regions = "cyan1", hide = TRUE, homebutton = FALSE, layer.name = "Fritidshusomrade") + 
+#   mapview(anlag_layer, col.regions = "cyan3", hide = TRUE, homebutton = FALSE, layer.name = "Anlaggningsomrade")
 
 
 # Write the data to a GPKG file
@@ -491,8 +400,8 @@ all_schools_sf <- st_as_sf(all_schools_sf)
 
 # Utför spatial join med funktionella_orter
 all_schools_in_orter <- st_join(all_schools_sf, funktionella_orter, join = st_within)
-mapview(all_schools_in_orter, zcol = "typ_service")+
-  mapview(funktionella_orter)
+# mapview(all_schools_in_orter, zcol = "typ_service")+
+#   mapview(funktionella_orter)
 
 # Städa bort onödiga kolumner, om det behövs
 all_schools_in_orter <- all_schools_in_orter %>% 
@@ -510,8 +419,8 @@ school_aggregates <- all_schools_in_orter %>%
   )
 # Join the aggregates back to the funktionella_orter sf object
 funktionella_orter_skola <- st_join(funktionella_orter, school_aggregates, by = "unique_id")
-mapview(funktionella_orter_skola)+
-  mapview(all_schools_sf, zcol = "typ_service")
+# mapview(funktionella_orter_skola)+
+#   mapview(all_schools_sf, zcol = "typ_service")
 
 
 # =================  join av funktionella orter ========================
