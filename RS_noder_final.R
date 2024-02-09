@@ -402,6 +402,17 @@ mapview(strategiska_noder)
 st_write(strategiska_noder, "G:/Samhällsanalys/GIS/projekt/rumslig_strategi/data/funktionella_orter.gpkg", 
          layer = "funktionella_orter_egenskaper", driver = "GPKG", append=TRUE)
 
+st_layers("G:/Samhällsanalys/GIS/projekt/rumslig_strategi/data/funktionella_orter.gpkg")
+# # Replace with the actual path to your Geopackage file
+# gpkg_path <- "G:/Samhällsanalys/GIS/projekt/rumslig_strategi/data/funktionella_orter.gpkg"
+# 
+# # Delete the Geopackage file
+# file_remove_status <- file.remove(gpkg_path)
+# 
+# # Check if the file was successfully removed
+# file_remove_status
+
+
 # ===================================================================================
 
 # Initial step: Identify storregionalnod based on service criteria

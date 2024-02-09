@@ -219,7 +219,7 @@ funktionella_orter <- final_data_with_id
 
 # st_write(funktionella_orter, "funktionella_orter.gpkg", layer = "funktionella_orter", driver = "GPKG")
 # G:\Samhällsanalys\GIS\projekt\rumslig_strategi\data
-st_write(funktionella_orter, "G:/Samhällsanalys/GIS/projekt/rumslig_strategi/data/funktionella_orter.gpkg", layer = "funktionella_orter", driver = "GPKG", append=FALSE)
+# st_write(funktionella_orter, "G:/Samhällsanalys/GIS/projekt/rumslig_strategi/data/funktionella_orter.gpkg", layer = "funktionella_orter", driver = "GPKG", append=FALSE)
 
 
 
