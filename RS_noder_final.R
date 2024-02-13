@@ -1,14 +1,7 @@
-# Testar att köra med funktionella_orter med alla fyra 
-# först sen joinar dessa istället för att bygga på efterhand som i skriptet RS_noder
-
-
-# noder utanför Dalarna, vilken data behövs?
-# kör med tätort och småort koppla dag och natt bef till funktionella tät och små ort först
-# ersätt skola med data från skolverkets enhetsregister
-
 
 #Ett skript som skapar rumslig strategi
 #Allt snyggt och imponerande nedan är skapat av min bästa kompis GPT4
+# Obs för att köra sista mapview behövs fler skript: RS_nvdb.R, pendling_qgis_plugin.R
 
 # libraries
 if (!require("pacman")) install.packages("pacman")
@@ -622,14 +615,14 @@ mapview(strategiska_noder, alpha.regions = 0.3, lwd = 0.2, layer.name = "Experim
   mapview(nargeografisknod, col.regions = "darkorange", cex = 10, lwd = 0.2, popup = paste("Detta är en ", nargeografisknod$typ_av_nod, "enligt definition/", nargeografisknod$filter), label = "typ_av_nod") +
   mapview(boendeort_service, col.regions = "red", cex = 6, lwd = 0.2, popup = paste("Detta är en ", boendeort_service$typ_av_nod, "enligt definition/", boendeort_service$filter), label = "typ_av_nod") +
   mapview(boendeort, col.regions = "darkred", cex = 3, lwd = 0.2, popup = paste("Detta är en ", boendeort$typ_av_nod, "enligt definition/", boendeort$filter), label = "typ_av_nod")+
-  mapview(nvdb_dalarna, zcol = "ars_dygns_trafik",label = "vagnummer", lwd = 2, hide = TRUE, legend = FALSE)+
+  # mapview(nvdb_dalarna, zcol = "ars_dygns_trafik",label = "vagnummer", lwd = 2, hide = TRUE, legend = FALSE)+
   mapview(indikator_per_ruta_sf_rensat, zcol = "indikator_tot", hide = TRUE, legend = FALSE)+
   mapview(laddstationer, zcol = "anslutningspunkter", col.regions = "red", alpha.regions = 0.3, cex = "anslutningspunkter", homebutton = FALSE, layer.name = "Publika laddstationer", hide = TRUE, legend = FALSE)+
   mapview(kraftfalt, zcol = "ClusterTyp", alpha.regions = 0.3, layer.name = "Kraftfalt", hide = TRUE, legend = FALSE)+
   mapview(conurbations, zcol = "color", cex = "size", layer.name = "Tatorter, arbetsmarknad", label = "tatort", hide = TRUE, legend = FALSE)+
   mapview(network, zcol = "nbrCommuters", lwd = "lwd_scaled", layer.name = "Pendlingsflode", label = "hover_text", hide = TRUE, legend = FALSE)+
   mapview(dagbef, zcol = "dagbef", label = "hover_text", layer.name = "Dagbefolkning (mer an 10 personer)", hide = TRUE, legend = FALSE)+
-  mapview(nvdb_dalarna, zcol = "lwd_scaled", lwd = "lwd_scaled", color = "black", legend = FALSE)
+  mapview(nvdb_dalarna, zcol = "ars_dygns_trafik", lwd = "lwd_scaled", color = "darkorange", legend = FALSE, hide = TRUE)
 
 strategiska_noder_25 <- strategiska_noder %>% 
   filter(befolkning_ort >= 1500)
