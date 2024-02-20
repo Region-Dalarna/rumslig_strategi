@@ -100,7 +100,7 @@ fritid_omr <- "fritidshusomraden/Fo2015_Swe99TM.shp"
 fritid_layer <- st_read(paste0(fil, fritid_omr), crs = 3006)
 fritid_layer <- fritid_layer |> 
   dplyr::filter(LANSNAMN == "Dalarna")
-mapview(fritid_layer)
+# mapview(fritid_layer)
 
 fil_anl <- "G:/Samhällsanalys/GIS/Geotorget/anlaggningsomrade_ln20/"
 
@@ -108,7 +108,7 @@ anlag_omr <- "anlaggningsomrade_ln20.gpkg"
 anlag_omr_path <- paste0(fil_anl, anlag_omr)
 # st_layers(anlag_omr_path)
 anlag_layer <- st_read(anlag_omr_path, layer = "anlaggningsomrade", crs = 3006)
-mapview(anlag_layer, zcol = "andamal")
+# mapview(anlag_layer, zcol = "andamal")
 anlag_layer <- anlag_layer %>% 
   filter(objekttyp != "Idrottsplan",
          andamal != "Idrottsanläggning",
@@ -209,24 +209,39 @@ glimpse(final_data_with_id)
 
 
 mapview(final_data_with_id)+
-  mapview(smaorter, col.regions = "red") + 
-  mapview(tatorter, col.regions = "blue") + 
-  mapview(fritid_layer, col.regions = "green") + 
-  mapview(anlag_layer, col.regions = "yellow") + 
+  mapview(smaorter, col.regions = "red") +
+  mapview(tatorter, col.regions = "blue") +
+  mapview(fritid_layer, col.regions = "green") +
+  mapview(anlag_layer, col.regions = "yellow") +
   mapview(funk_ort_centroids)
+# 
+funktionella_orter <- final_data_with_id %>% 
+    select(-funk_ort.x, -funk_ort.y, -priority)
 
-funktionella_orter <- final_data_with_id
+# names(funktionella_orter)
+# funktionella_orter <- funktionella_orter
 
 # st_write(funktionella_orter, "funktionella_orter.gpkg", layer = "funktionella_orter", driver = "GPKG")
 # G:\Samhällsanalys\GIS\projekt\rumslig_strategi\data
 # st_write(funktionella_orter, "G:/Samhällsanalys/GIS/projekt/rumslig_strategi/data/funktionella_orter.gpkg", layer = "funktionella_orter", driver = "GPKG", append=FALSE)
 
 
+mapview(funktionella_orter, layer.name = "Funktionella orter")+
+  mapview(smaorter, col.regions = "red", layer.name = "Småorter") +
+  mapview(tatorter, col.regions = "blue", layer.name = "Tätorter") +
+  mapview(fritid_layer, col.regions = "green", layer.name = "Fritidshusområde") +
+  mapview(anlag_layer, col.regions = "yellow", layer.name = "Anläggningsområde")
 
 
+# overwrite the gpkg and inlcude all files from mapview above
 
+sokvag_funk_ort_gpkg <- "G:/Samhällsanalys/GIS/projekt/rumslig_strategi/data/funktionella_orter.gpkg"
 
-
+st_write(funktionella_orter, sokvag_funk_ort_gpkg, layer = "funktionella_orter", driver = "GPKG", append=FALSE)
+st_write(smaorter, sokvag_funk_ort_gpkg, layer = "sma_orter", driver = "GPKG", append=FALSE)
+st_write(tatorter, sokvag_funk_ort_gpkg, layer = "tat_orter", driver = "GPKG", append=FALSE)
+st_write(fritid_layer, sokvag_funk_ort_gpkg, layer = "fritid_omr", driver = "GPKG", append=FALSE)
+st_write(anlag_layer, sokvag_funk_ort_gpkg, layer = "anlag_omr", driver = "GPKG", append=FALSE)
 
 
 
