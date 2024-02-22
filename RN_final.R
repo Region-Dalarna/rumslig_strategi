@@ -331,24 +331,24 @@ zoom <- 20
 
 # mapview(funktionella_orter_final, center = center, zoom = zoom)
 # 
-# mapview(funktionella_orter_final, col.regions = "lightblue", alpha.regions = 0.2, label = "labelText", homebutton = FALSE, layer.name = "Funktionella orter", lwd = 1)+
-#   mapview(regionalnod_sjukhus, col.regions = "chartreuse4", cex = 25, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
-#   mapview(regionalnod_vardcentral, col.regions = "chartreuse1", cex = 20, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
-#   mapview(regionalnod_kommersiell_service, col.regions = "gold1", cex = 15, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
-#   mapview(regionalnod_bredband, col.regions = "orange2", cex = 10, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
-#   mapview(regionalnod_sysselsattning, col.regions = "red4", cex = 5, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
-#   mapview(apotek_sf, col.regions = "blueviolet", label = "labelText", layer.name = "Apotek", homebutton = FALSE, hide = TRUE) +
-#   mapview(betalnings_formedling_sf, col.regions = "darkorchid1", label = "labelText", layer.name = "Betalningsformedling", homebutton = FALSE, hide = TRUE) +
-#   mapview(dagkasse_insattning_sf, col.regions = "lightsalmon2", label = "labelText", layer.name = "Dagkasseinsattning", homebutton = FALSE, hide = TRUE) +
-#   mapview(dagligvaror_EJ_fullsort_sf, col.regions = "deeppink4", label = "labelText", layer.name = "Dagligvaror Ej Fullsortiment", homebutton = FALSE, hide = TRUE) +
-#   mapview(dagligvaror_fullsort_sf, col.regions = "lightslateblue", label = "labelText", layer.name = "Dagligvaror Fullsortiment", homebutton = FALSE, hide = TRUE) +
-#   mapview(drivmedel_personbil_sf, col.regions = "deeppink", label = "labelText", layer.name = "Drivmedel Personbil", homebutton = FALSE, hide = TRUE) +
-#   mapview(posttjanster_sf, col.regions = "brown", label = "labelText", layer.name = "Posttjanster", homebutton = FALSE, hide = TRUE) +
-#   mapview(uttagsautomat_sf, col.regions = "pink", label = "labelText", layer.name = "Uttagsautomat", homebutton = FALSE, hide = TRUE)+
-#   mapview(smaort_layer, col.regions = "cyan2", hide = TRUE, homebutton = FALSE, layer.name = "Smaorter") + 
-#   mapview(tatort_layer, col.regions = "cyan4", hide = TRUE, homebutton = FALSE, layer.name = "Tatorter") + 
-#   mapview(fritid_layer, col.regions = "cyan1", hide = TRUE, homebutton = FALSE, layer.name = "Fritidshusomrade") + 
-#   mapview(anlag_layer, col.regions = "cyan3", hide = TRUE, homebutton = FALSE, layer.name = "Anlaggningsomrade")
+mapview(funktionella_orter_final, col.regions = "lightblue", alpha.regions = 0.2, label = "labelText", homebutton = FALSE, layer.name = "Funktionella orter", lwd = 1)+
+  mapview(regionalnod_sjukhus, col.regions = "chartreuse4", cex = 25, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
+  mapview(regionalnod_vardcentral, col.regions = "chartreuse1", cex = 20, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
+  mapview(regionalnod_kommersiell_service, col.regions = "gold1", cex = 15, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
+  mapview(regionalnod_bredband, col.regions = "orange2", cex = 10, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
+  mapview(regionalnod_sysselsattning, col.regions = "red4", cex = 5, label = "labelText", alpha.regions = 0.7, homebutton = FALSE, lwd = 0.1)+
+  mapview(apotek_sf, col.regions = "blueviolet", label = "labelText", layer.name = "Apotek", homebutton = FALSE, hide = TRUE) +
+  mapview(betalnings_formedling_sf, col.regions = "darkorchid1", label = "labelText", layer.name = "Betalningsformedling", homebutton = FALSE, hide = TRUE) +
+  mapview(dagkasse_insattning_sf, col.regions = "lightsalmon2", label = "labelText", layer.name = "Dagkasseinsattning", homebutton = FALSE, hide = TRUE) +
+  mapview(dagligvaror_EJ_fullsort_sf, col.regions = "deeppink4", label = "labelText", layer.name = "Dagligvaror Ej Fullsortiment", homebutton = FALSE, hide = TRUE) +
+  mapview(dagligvaror_fullsort_sf, col.regions = "lightslateblue", label = "labelText", layer.name = "Dagligvaror Fullsortiment", homebutton = FALSE, hide = TRUE) +
+  mapview(drivmedel_personbil_sf, col.regions = "deeppink", label = "labelText", layer.name = "Drivmedel Personbil", homebutton = FALSE, hide = TRUE) +
+  mapview(posttjanster_sf, col.regions = "brown", label = "labelText", layer.name = "Posttjanster", homebutton = FALSE, hide = TRUE) +
+  mapview(uttagsautomat_sf, col.regions = "pink", label = "labelText", layer.name = "Uttagsautomat", homebutton = FALSE, hide = TRUE)+
+  mapview(smaort_layer, col.regions = "cyan2", hide = TRUE, homebutton = FALSE, layer.name = "Smaorter") +
+  mapview(tatort_layer, col.regions = "cyan4", hide = TRUE, homebutton = FALSE, layer.name = "Tatorter") +
+  mapview(fritid_layer, col.regions = "cyan1", hide = TRUE, homebutton = FALSE, layer.name = "Fritidshusomrade") +
+  mapview(anlag_layer, col.regions = "cyan3", hide = TRUE, homebutton = FALSE, layer.name = "Anlaggningsomrade")
 
 
 # Write the data to a GPKG file

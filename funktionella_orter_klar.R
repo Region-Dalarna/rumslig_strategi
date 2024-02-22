@@ -25,11 +25,31 @@ source("https://raw.githubusercontent.com/Region-Dalarna/funktioner/main/func_AP
 # För att komma förbi proxyn
 set_config(use_proxy(url = "http://mwg.ltdalarna.se", port = 9090, 
                      username = key_list(service = "auth")$username, password = key_get("auth", key_list(service = "auth")$username)))
-set_config(config(ssl_verifypeer = 0L))
+# set_config(config(ssl_verifypeer = 0L))
 
 # avoid scientific notation
 options(scipen=999)
 # ===================================================================================
+
+# lägger till regso för att ev, koppla namn till småorter och anläggningsområden
+# G:\Samhällsanalys\GIS\grundkartor\regso
+
+# regso <- "G:/Samhällsanalys/GIS/grundkartor/regso/RegSO_2018_v1.gpkg"
+# 
+# st_layers(regso)
+# regso <- st_read(regso, layer = "RegSO_2018_v1", crs = 3006)
+
+# testar med ortnamn
+# G:\Samhällsanalys\GIS\grundkartor\ort_namn
+
+ortnamn_fil <- "G:/Samhällsanalys/GIS/grundkartor/ort_namn/ortnamn_ln20.gpkg"
+st_layers(ortnamn_fil)
+ortnamn <- st_read(ortnamn_fil, layer = "ortnamn", crs = 3006)
+ortnamn <- st_as_sf(ortnamn, coords = c("ekoordinat", "nkoordinat"), crs = 3006) # Replace 3006 with your actual CRS code
+
+
+
+
 # fil <- "C:/Users/henri/data_fran_G/"
 #G:\Samhällsanalys\GIS\grundkartor\smaorter
 fil <- "G:/Samhällsanalys/GIS/grundkartor/"
@@ -218,6 +238,20 @@ mapview(final_data_with_id)+
 funktionella_orter <- final_data_with_id %>% 
     select(-funk_ort.x, -funk_ort.y, -priority)
 
+
+# lägg till namn från regso
+# filter where kommun har 20 som dom två första av fyra siffror, alltså position 1 och 2 ska vara 20.
+# regso <- regso %>% 
+#   filter(str_detect(kommun, "^20.."))
+# 
+# mapview(regso, zcol = "regso")+
+
+# testar att namnge med ortnamn
+
+  
+mapview(ortnamn, label = "ortnamn")+
+  mapview(funktionella_orter)
+
 # names(funktionella_orter)
 # funktionella_orter <- funktionella_orter
 
@@ -234,14 +268,14 @@ mapview(funktionella_orter, layer.name = "Funktionella orter")+
 
 
 # overwrite the gpkg and inlcude all files from mapview above
-
-sokvag_funk_ort_gpkg <- "G:/Samhällsanalys/GIS/projekt/rumslig_strategi/data/funktionella_orter.gpkg"
-
-st_write(funktionella_orter, sokvag_funk_ort_gpkg, layer = "funktionella_orter", driver = "GPKG", append=FALSE)
-st_write(smaorter, sokvag_funk_ort_gpkg, layer = "sma_orter", driver = "GPKG", append=FALSE)
-st_write(tatorter, sokvag_funk_ort_gpkg, layer = "tat_orter", driver = "GPKG", append=FALSE)
-st_write(fritid_layer, sokvag_funk_ort_gpkg, layer = "fritid_omr", driver = "GPKG", append=FALSE)
-st_write(anlag_layer, sokvag_funk_ort_gpkg, layer = "anlag_omr", driver = "GPKG", append=FALSE)
+# 
+# sokvag_funk_ort_gpkg <- "G:/Samhällsanalys/GIS/projekt/rumslig_strategi/data/funktionella_orter.gpkg"
+# 
+# st_write(funktionella_orter, sokvag_funk_ort_gpkg, layer = "funktionella_orter", driver = "GPKG", append=FALSE)
+# st_write(smaorter, sokvag_funk_ort_gpkg, layer = "sma_orter", driver = "GPKG", append=FALSE)
+# st_write(tatorter, sokvag_funk_ort_gpkg, layer = "tat_orter", driver = "GPKG", append=FALSE)
+# st_write(fritid_layer, sokvag_funk_ort_gpkg, layer = "fritid_omr", driver = "GPKG", append=FALSE)
+# st_write(anlag_layer, sokvag_funk_ort_gpkg, layer = "anlag_omr", driver = "GPKG", append=FALSE)
 
 
 

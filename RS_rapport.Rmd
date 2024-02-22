@@ -1,0 +1,519 @@
+---
+title: "Strategiska noder"
+author: "Samhällsanalys"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+# libraries
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse, 
+               sf, 
+               sp, 
+               httr, 
+               mapview, 
+               leaflet, 
+               readxl, 
+               keyring,
+               DBI,
+               units,
+               dplyr,
+               tidyr,
+               ggplot2,
+               classInt,
+               plotly)
+
+options(dplyr.summarise.inform = FALSE)
+
+# source("https://raw.githubusercontent.com/Region-Dalarna/funktioner/main/func_postgis.R")
+# source("https://raw.githubusercontent.com/Region-Dalarna/funktioner/main/func_GIS.R")
+# source("https://raw.githubusercontent.com/Region-Dalarna/funktioner/main/func_text.R")
+# source("https://raw.githubusercontent.com/Region-Dalarna/funktioner/main/func_API.R")
+
+# För att komma förbi proxyn
+set_config(use_proxy(url = "http://mwg.ltdalarna.se", port = 9090, 
+                     username = key_list(service = "auth")$username, password = key_get("auth", key_list(service = "auth")$username)))
+
+# Disable SSL peer verification
+httr::set_config(httr::config(ssl_verifypeer = 0L))
+
+# avoid scientific notation
+options(scipen=999)
+
+```
+
+
+```{r läs in lager från G, include=FALSE, echo=FALSE}
+
+# =========================== läs in lager ==================
+
+# Offentlig service (sjukvård, Utbudspunkter)
+sjukvard_fil <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/Offentlig_service/Utbudspunkter.csv"
+
+# Sysselsättning
+# sökvägen är G:\Samhällsanalys\GIS\projekt\rumslig_strategi\data
+befolkning_fil <- "G:/Samhällsanalys/GIS/projekt/rumslig_strategi/data/dag_natt_bef_500.gpkg"
+# grans_dagbef <- 100 
+
+# Komersiell service nedladdat från Pipos Serviceanalys 2023-03, 8 st CSV-filer
+kom_serv_filer <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/FrånPipos/"
+
+funktionella_orter_fil <- "data/funktionella_orter.gpkg"
+
+# st_layers(funktionella_orter_fil)
+funktionella_orter <- st_read(funktionella_orter_fil, layer = "funktionella_orter", crs = 3006)
+# names(funktionella_orter)
+
+smaorter <- st_read(funktionella_orter_fil, layer = "sma_orter", crs = 3006)
+tatorter <- st_read(funktionella_orter_fil, layer = "tat_orter", crs = 3006)
+fritid_layer <- st_read(funktionella_orter_fil, layer = "fritid_omr", crs = 3006)
+anlag_layer <- st_read(funktionella_orter_fil, layer = "anlag_omr", crs = 3006)
+
+
+```
+## Funktionella orter
+Kartan nedan ger en överblick över de funktionella orterna i Dalarna. Denna metodik är utvecklad som ett experiment för att inkludera och framhäva platser som annars inte synliggörs i traditionella analyser, vilka ofta begränsar sig till att endast inkludera tätorter. Ett exempel på en sådan plats är Sälenfjällen, som inte fångas upp när endast tätortsbegreppet används.
+
+Begreppet "funktionella orter" omfattar en bredare kategori av bebyggelser, inkluderande tätorter, småorter, fritidshusområden och anläggningsområden. För att skapa en mer sammanhängande bild av dessa områden har vi infört en buffertzon på 300 meter. Denna buffert används för att sammanlänka närliggande platser eller orter som annars skulle separeras av naturliga hinder, exempelvis älvar. Detta gör det möjligt att betrakta platser som Älvdalen och Västermyckeläng som en enhetlig funktionell ort.
+
+Genom att utgå från konceptet funktionella orter, hädanefter orter, får vi en mer inkluderande och detaljerad förståelse för regionens geografiska och samhälleliga struktur. Detta är särskilt viktigt för att kunna förstå hur olika platser samverkar och påverkar varandra, samt för att kunna identifiera och förstå regionala skillnader och särdrag.
+
+```{r karta orter, include=TRUE, echo=FALSE}
+
+mapview(funktionella_orter, layer.name = "Funktionella orter", lwd = 0.5, homebutton = FALSE, alpha.regions = 0.1, col.regions = "orange", hide = TRUE)+
+  mapview(smaorter, col.regions = "purple", layer.name = "Småorter", lwd = 0.3, homebutton = FALSE, alpha.regions = 0.3) +
+  mapview(tatorter, col.regions = "blue", layer.name = "Tätorter", lwd = 0.3, homebutton = FALSE, alpha.regions = 0.3) +
+  mapview(fritid_layer, col.regions = "green", layer.name = "Fritidshusområde", lwd = 0.3, homebutton = FALSE, alpha.regions = 0.3) +
+  mapview(anlag_layer, col.regions = "yellow", layer.name = "Anläggningsområde", lwd = 0.3, homebutton = FALSE, alpha.regions = 0.3)
+```
+
+
+```{r dagbefolkning, include=FALSE, echo=FALSE}
+# ===================== sysselsättning =================
+
+orter_sokvag <- "data/funktionella_orter.gpkg"
+orter_layer <- st_read(orter_sokvag, layer = "funktionella_orter_egenskaper")
+# st_layers(funktionella_orter_fil)
+funktionella_orter_befolkning <- st_read(funktionella_orter_fil, layer = "funktionella_orter_bef", crs = 3006)
+# names(funktionella_orter)
+
+befolkning <- st_read(befolkning_fil) |>
+  st_transform(3006) |>
+  st_make_valid()
+# mapview(befolkning)
+
+#make centroids
+dagbef_ruta <- befolkning %>% 
+  filter(!is.na(dag_bef)) %>% 
+  select(-Dagbefolkning, -Nattbefolkning) %>% 
+  filter(dag_bef >= 5)
+
+nattbef_ruta <- befolkning %>% 
+  filter(!is.na(natt_bef))%>% 
+  select(-Dagbefolkning, -Nattbefolkning )%>% 
+  filter(natt_bef >= 5)
+
+# Define the number of breaks you want
+n_breaks <- 5 # Adjust based on your preference
+
+# Calculate Jenks Natural Breaks for dag_bef
+dag_bef_breaks <- classIntervals(dagbef_ruta$dag_bef, n = n_breaks, style = "jenks")$brks
+# Generate a color palette based on the breaks
+dag_bef_colors <- colorRampPalette(c("lightyellow", "darkred"))(length(dag_bef_breaks) - 1)
+
+# Calculate Jenks Natural Breaks for natt_bef
+natt_bef_breaks <- classIntervals(nattbef_ruta$natt_bef, n = n_breaks, style = "jenks")$brks
+# Generate a color palette based on the breaks
+natt_bef_colors <- colorRampPalette(c("lightblue", "darkblue"))(length(natt_bef_breaks) - 1)
+
+# dagbefolkning diagram
+# Correcting the select statement to ensure nattbefolkning_ruta is included
+orter_layer_befolkning <- orter_layer %>%
+  filter(unique_id <= 20) %>%
+  mutate(nattbefolkning_ruta = -sum_nattbef_ruta) %>%
+  select(namn, unique_id, befolkning_ort, dagbefolkning_ruta = sum_dagbef_ruta, nattbefolkning_ruta, geom)
+
+# Verifying the column names again
+# names(orter_layer_befolkning)
+
+# Assuming the above step now correctly includes 'nattbefolkning_ruta',
+# proceed with pivot_longer
+orter_befolkning_long <- pivot_longer(orter_layer_befolkning,
+                                      cols = c(dagbefolkning_ruta, nattbefolkning_ruta),
+                                      names_to = "Kategori",
+                                      values_to = "Antal_personer")
+```
+
+## Befolkningen i Dalarna
+
+I analysen använder vi konceptet dagbefolkning som ett mått på orters sysselsättningsgrad. Detta tillvägagångssätt möjliggör en djupare förståelse för var människor arbetar och tillbringar sina dagar, i jämförelse med var de bor; nattbefolkningen.
+
+### Visualisering av Befolkningstäthet
+
+I kartan nedan presenteras befolkningstätheten i Dalarna, uppdelad i 500 meters rutor. Genom användning av en färgskala illustreras antalet personer per ruta. Mörkare nyanser representerar områden med högre befolkningstäthet, vilket ger en tydlig överblick över var i landskapet som befolkningstätheten är som störst.
+
+
+```{r karta befolkning, include=TRUE, echo=FALSE}
+# Create mapviews with Jenks Natural Breaks
+mapview(nattbef_ruta, label = "natt_bef", at = natt_bef_breaks, col.regions = natt_bef_colors, legend = TRUE, hide = TRUE, lwd = 0.1, homebutton = FALSE, alpha.regions = 0.8) + 
+  mapview(dagbef_ruta, label = "dag_bef", at = dag_bef_breaks, col.regions = dag_bef_colors, legend = TRUE, lwd = 0.1, alpha.regions = 0.8) + 
+  mapview(funktionella_orter_befolkning, legend = FALSE, hide = TRUE, lwd = 0.6, homebutton = FALSE, alpha.regions = 0.1, col.regions = "orange")
+
+```
+
+### Dag- och Nattbefolkning
+
+För att ytterligare belysa befolkningens fördelning i Dalarna, åskådliggör det nedanstående diagrammet skillnaden mellan dag- och nattbefolkningen i de 20 mest befolkningstäta (funktionella) orterna. Denna jämförelse ger insikter i hur befolkningen fördelas mellan olika delar av dagen och natten, vilket understryker dynamiken i regionens användning och aktivitet.
+
+```{r diagram befolkning, include=TRUE, echo=FALSE}
+# Create mapviews with Jenks Natural Breaks
+# Your existing ggplot code
+ggplot(orter_befolkning_long, aes(x = reorder(namn, -befolkning_ort), 
+                                                         y = Antal_personer, fill = Kategori)) + 
+                         geom_bar(stat = "identity") + 
+                         scale_y_continuous(labels = abs) + 
+                         labs(title = "Dag- och nattbefolkningen per 20 folkrikaste (funktionella) orter i Dalarna", 
+                              x = "", 
+                              y = "Befolkningen (Absoluta tal)", fill = "") + 
+                         theme_minimal() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+                         scale_fill_manual(values = c("dagbefolkning_ruta" = "red", "nattbefolkning_ruta" = "blue"))
+
+```
+
+
+
+
+```{r las in lager, include=FALSE, echo=FALSE}
+
+orter_sokvag <- "C:/Users/aldhen/pa_taget/RS/funktionella_orter.gpkg"
+orter_layer <- st_read(orter_sokvag, layer = "funktionella_orter_egenskaper")
+
+orter_layer_handel <- orter_layer %>%
+  filter(unique_id <= 20) %>%
+  select(namn, unique_id, befolkning_ort, sum_drivmedel, sum_post, sum_dagligvaror, geom) %>%
+  mutate(n_sjukvard = rowSums(cbind(sum_drivmedel, sum_post, sum_dagligvaror), na.rm = TRUE))
+
+
+
+
+
+```
+
+```{r läs in handel, include=FALSE, echo=FALSE}
+
+
+# En funktion som läser och konverterar CSV till sf-objekt
+read_and_convert_to_sf <- function(file_path, x_col, y_col, crs, service_abbr, service_category) {
+  df <- read.csv(file_path, header = TRUE, sep = ";", fileEncoding = "ISO-8859-1") %>%
+    st_as_sf(coords = c(x_col, y_col), crs = crs, agr = "constant")
+  return(df)
+}
+
+# Assuming the read and convert function works as intended for your files, now directly create sf objects
+#apotek_sf <- read_and_convert_to_sf(paste0(kom_serv_filer, "apoteksvaror.csv"), "x", "y", 3006, "APK", "basic")
+dagligvaror_fullsort_sf <- read_and_convert_to_sf(paste0(kom_serv_filer, "dagligvaror_fullsortiment.csv"), "x", "y", 3006, "DVF", "commercial")
+drivmedel_personbil_sf <- read_and_convert_to_sf(paste0(kom_serv_filer, "drivmedel_personbil.csv"), "x", "y", 3006, "DMP", "commercial")
+posttjanster_sf <- read_and_convert_to_sf(paste0(kom_serv_filer, "posttjänster.csv"), "x", "y", 3006, "PST", "basic")
+
+# Add service_category column to each dataframe
+#apotek_sf$service_category <- "apoteksvaror"
+dagligvaror_fullsort_sf$service_category <- "dagligvaror_fullsortiment"
+drivmedel_personbil_sf$service_category <- "drivmedel_personbil"
+posttjanster_sf$service_category <- "posttjänster"
+
+dagligvaror_fullsort_sf$labelText <- "Dagligvaror Fullsortiment"
+drivmedel_personbil_sf$labelText <- "Drivmedel för Personbil"
+posttjanster_sf$labelText <- "Posttjänster"
+#apotek_sf$labelText <- "Apotekstjänst"
+
+
+# Combine all individual sf objects into one sf object
+all_services_sf <- bind_rows(
+  #apotek_sf,
+  dagligvaror_fullsort_sf,
+  drivmedel_personbil_sf,
+  posttjanster_sf
+)
+
+# This step ensures that the combined object retains its spatial properties
+all_services_sf <- st_as_sf(all_services_sf)
+
+# Perform spatial join with funktionella_orter
+all_services_in_orter <- st_join(all_services_sf, funktionella_orter, join = st_within)
+#städa bort några kolumner
+all_services_in_orter <- all_services_in_orter %>% 
+  select(-c(antal.70...5.km, 
+            trans.behov.70...5.km,
+            kortast.rutt.70...5.km,
+            antal.70...10.km,
+            trans.behov.70...10.km,
+            kortast.rutt.70...10.km))
+# Assuming all_services_in_orter is your combined sf data frame that includes service_category
+
+all_services_in_orter <- all_services_in_orter %>%
+  mutate(klass = case_when(
+    service_category %in% c("dagligvaror_fullsortiment", "drivmedel_personbil", "posttjänster") ~ "handel",
+    # service_category == "apoteksvaror" ~ "sjukvard",
+    TRUE ~ service_category # This line might need adjustment
+  ))
+
+
+
+# Aggregate service information
+service_aggregates <- all_services_in_orter %>%
+  group_by(unique_id) %>%
+  summarise(
+    sum_dagligvaror = sum(service_category == "dagligvaror_fullsortiment"),
+    sum_drivmedel = sum(service_category == "drivmedel_personbil"),
+    sum_post = sum(service_category == "posttjänster"),
+    n_handel = sum(klass == "handel"),
+    # sum_apotek = sum(service_category == "apoteksvaror")
+  )
+# Identify and filter 'funktionella_orter' with at least one of each service type
+
+# Join the aggregates back to the funktionella_orter sf object
+funktionella_orter_kom_service <- st_join(funktionella_orter, service_aggregates, by = "unique_id")
+
+funktionella_orter_kom_service <- funktionella_orter_kom_service %>% 
+  rename(unique_id = unique_id.x) %>% 
+  select(-unique_id.y)
+
+dagligvaror_fullsortiment <- dagligvaror_fullsort_sf %>% 
+  select(-service_category)
+drivmedel_personbil <- drivmedel_personbil_sf %>% 
+  select(-service_category)
+posttjanster <- posttjanster_sf %>% 
+  select(-service_category)
+
+```
+
+## Handel
+
+Handel utgörs av bensinstationer, dagligvaruhandel med fullt sortiment och posttjänster. Dessa tre kategorier av handel är av särskilt intresse då de utgör en viktig del av den kommersiella servicen i en region. I kartan nedan visas var dessa handelsplatser är lokaliserade i Dalarna. 
+
+```{r karta handel, include=TRUE, echo=FALSE}
+mapview(funktionella_orter_kom_service, label = "namn", alpha.regions = 0.3, col.regions = "grey", lwd = 0.6, hide = TRUE)+
+  mapview(dagligvaror_fullsortiment, col.regions = "red", label = "labelText", cex = 5, alpha.regions = 0.5, lwd = 0.3)+
+  mapview(drivmedel_personbil, col.regions = "blue", label = "labelText", cex = 5, alpha.regions = 0.5, lwd = 0.3)+
+  mapview(posttjanster, col.regions = "darkgreen", label = "labelText", cex = 5, alpha.regions = 0.5, lwd = 0.3)
+
+```
+
+Diagrammet visar handel aggregerat till orter, där varje ort representeras av en stapel. Staplarna är uppdelade i tre kategorier: drivmedel, posttjänster och dagligvaror.  
+
+```{r diagram handel, include=TRUE, echo=FALSE}
+orter_handel_long <- gather(orter_layer_handel, key = "Category", value = "Count", 
+                           sum_drivmedel, sum_post, sum_dagligvaror, na.rm = TRUE)
+
+handel_plot <- ggplot(orter_handel_long, aes(x = reorder(namn, -befolkning_ort), 
+                                              y = Count, fill = Category)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  labs(title = "Handelsplatser per ort", x = "", y = "Totalt antal handelsplatser") +
+  scale_fill_brewer(palette = "Set1") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+handel_plot
+```
+
+## Sjukvård
+
+Sjukvård utgörs av sjukhus, vårdcentraler och apotekstjänst. Dessa tre kategorier av sjukvård är av särskilt intresse då de utgör en viktig del av den offentliga servicen i regionen. I kartan nedan visas var dessa utbudspunkter är lokaliserade i Dalarna. 
+
+```{r läs in data sjukvard, include=TRUE, echo=FALSE}
+# diagrammet 
+
+orter_layer_sjukvard <- orter_layer %>%
+  filter(unique_id <= 20) %>%
+  select(namn, unique_id, befolkning_ort, Vardcentral = sum_vardcentral, Sjukhus = sum_sjukhus, Apotek = sum_apotek, geom) %>%
+  mutate(n_sjukvard = rowSums(cbind(Vardcentral, Sjukhus, Apotek), na.rm = TRUE))
+
+orter_sjukvard_long <- gather(orter_layer_sjukvard, key = "Category", value = "Count", 
+                           Vardcentral, Sjukhus, Apotek, na.rm = TRUE)
+
+# Offentlig service (sjukvård, Utbudspunkter)
+sjukvard_fil <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/Offentlig_service/Utbudspunkter.csv"
+
+# Komersiell service nedladdat från Pipos Serviceanalys 2023-03, 8 st CSV-filer
+kom_serv_filer <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/FrånPipos/"
+
+# En funktion som läser och konverterar CSV till sf-objekt
+read_and_convert_to_sf <- function(file_path, x_col, y_col, crs, service_abbr, service_category) {
+  df <- read.csv(file_path, header = TRUE, sep = ";", fileEncoding = "ISO-8859-1") %>%
+    st_as_sf(coords = c(x_col, y_col), crs = crs, agr = "constant")
+  return(df)
+}
+# Assuming the read and convert function works as intended for your files, now directly create sf objects
+apotek_sf <- read_and_convert_to_sf(paste0(kom_serv_filer, "apoteksvaror.csv"), "x", "y", 3006, "APK", "basic")
+
+#Add service_category column to each dataframe
+# apotek_sf$service_category <- "apoteksvaror"
+# 
+# apotek_sf$labelText <- "Apotekstjänst"
+
+apotek <- apotek_sf
+
+#      
+# ===================== Rumslig strategi sjukvård ==========
+# Läs in data
+sjukvard <- read.csv(sjukvard_fil, header = TRUE, sep = ";", fileEncoding = "ISO-8859-1")
+# Ersätt kommatecken med punkter i koordinatkolumnerna
+sjukvard$Sweref99X <- as.numeric(gsub(",", ".", sjukvard$Sweref99X))
+sjukvard$Sweref99Y <- as.numeric(gsub(",", ".", sjukvard$Sweref99Y))
+
+# Försök konvertera till sf-objekt igen, efter att ha filtrerat bort eventuella NA-värden
+sjukvard_filtered <- sjukvard %>%
+  filter(!is.na(Sweref99X) & !is.na(Sweref99Y))
+
+sjukvard_sf <- sjukvard_filtered %>%
+  st_as_sf(coords = c("Sweref99Y", "Sweref99X"), crs = 3006, agr = "constant")
+
+sjukvard_sf <- sjukvard_sf %>% 
+  filter(!is.na(FghKlass))
+
+sjukhus <- sjukvard_sf %>% 
+  filter(FghKlass == "Sjukhus")
+
+vardcentral <- sjukvard_sf %>% 
+  filter(FghKlass == "Vårdcentral")
+```
+
+
+```{r karta sjukvard, include=TRUE, echo=FALSE}
+mapview(sjukhus, col.regions = "red", lwd = 0.3, cex = 20, homebutton = FALSE, alpha.regions = 0.6, zcol = "Populärnamn", legend = FALSE)+
+  mapview(vardcentral, col.regions = "orange", lwd = 0.3, cex = 10, homebutton = FALSE, alpha.regions = 0.7, zcol = "Populärnamn", legend = FALSE)+
+  mapview(apotek, col.regions = "yellow", cex = 5, lwd = 0.5, homebutton = FALSE, alpha.regions = 0.6, zcol = "namn", legend = FALSE)
+
+
+```
+
+Diagrammet visar sjukvård aggregerat till orter, där varje ort representeras av en stapel. Staplarna är uppdelade i tre kategorier: sjukhus, vårdcentraler och apotek.
+
+```{r diagram sjukvard, include=TRUE, echo=FALSE}
+
+ggplot(orter_sjukvard_long, aes(x = reorder(namn, -befolkning_ort), 
+                                y = Count, fill = Category)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  labs(title = "Utbudspunkter sjukvård", x = "", y = "Totalt antal utbudspunkter") +
+  scale_fill_manual(values = c("Sjukhus" = "red", "Vardcentral" = "orange", "Apotekstjanster" = "yellow")) +  # Justera nycklarna efter dina faktiska kategorinamn
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+## Utbildning
+
+Utbildning utgörs av grundskolor, gymnasieskolor och högskolor. Dessa tre kategorier av utbildning är av särskilt intresse då de utgör en viktig del av den offentliga servicen i en region. I kartan nedan visas var dessa utbildningsplatser är lokaliserade i Dalarna. 
+
+```{r 7läs in data utbildning, include=TRUE, echo=FALSE}
+
+# diagramet
+
+orter_layer_skola <- orter_layer %>%
+  filter(unique_id <= 20) %>%
+  select(namn, unique_id, befolkning_ort, sum_grundskola, sum_gymnasieskola, sum_hogskola, geom) %>%
+  mutate(n_utbildning = rowSums(cbind(sum_grundskola, sum_gymnasieskola, sum_hogskola), na.rm = TRUE))
+
+orter_utbildning_long <- gather(orter_layer_skola, key = "Category", value = "Count", 
+                           sum_grundskola, sum_gymnasieskola, sum_hogskola, na.rm = TRUE)
+
+# Read and process school data
+skola <- st_read("skola_dalarna.gpkg", crs = 3006)
+
+create_unique_skola <- function(skola_df, school_type) {
+  skola_df %>%
+    filter(Skolformer_typ == school_type) %>%
+    distinct(Skolenhetskod, .keep_all = TRUE)
+}
+
+# Create a list of data frames for each school type
+skola_list <- lapply(unique(skola$Skolformer_typ), function(school_type) {
+  create_unique_skola(skola, school_type)
+}) %>% 
+  setNames(unique(skola$Skolformer_typ))
+
+# Now you can remove unnecessary columns for each data frame in the list
+skola_list <- lapply(skola_list, function(df) {
+  select(df, -Punkttyp, -Skolformer_id, -Status)
+})
+
+# Create individual data frames for each school type
+list2env(skola_list, .GlobalEnv)
+
+Grundskola$service_category <- "Grundskola"
+Gymnasieskola$service_category <- "Gymnasieskola"
+# Visualize with mapview
+# mapview(Grundskola, col.regions = "pink") +
+#   mapview(Gymnasieskola, col.regions = "purple")
+
+# Read and process public service data
+
+offentlig_service_fil <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/Offentlig_service/hanna_praktikant/offentlig_service.csv"
+offentlig_service <- read_delim(offentlig_service_fil, delim = ";", locale = locale(encoding = "ISO-8859-1")) %>%
+  filter(!is.na(x) & !is.na(y)) %>%
+  st_as_sf(coords = c("y", "x"), crs = 3006)
+
+# Create sf objects for each service type
+list_sf_objects <- offentlig_service %>%
+  split(.$typ_service)
+
+# Create Hogskola data frame
+Hogskola <- data.frame(matrix(ncol = length(names(Gymnasieskola)), nrow = 2))
+names(Hogskola) <- names(Gymnasieskola)
+Hogskola$Namn <- c("Campus Borlänge", "Campus Falun")
+Hogskola$geom <- list_sf_objects$högskola$geometry[1:2]
+Hogskola[, !(names(Hogskola) %in% c("Namn", "geom"))] <- NA
+
+# Set service_category and order columns to match Gymnasieskola
+Hogskola <- Hogskola %>%
+  mutate(service_category = "Högskola") %>%
+  select(names(Gymnasieskola))
+
+Hogskola$Skolformer_typ <- "Högskola"
+Hogskola$service_category <- "Högskola"
+
+# Merge all school types into one sf object
+Utbildning <- bind_rows(Grundskola, Gymnasieskola, Hogskola) %>%
+  st_as_sf() %>% 
+  select(-service_category)
+
+Hogskola <- Utbildning %>%
+  filter(Skolformer_typ == "Högskola")
+  
+Gymnasieskola <- Utbildning %>%
+  filter(Skolformer_typ == "Gymnasieskola")  
+  
+Grundskola <- Utbildning %>%
+  filter(Skolformer_typ == "Grundskola")
+
+
+
+```
+
+
+```{r karta utbildning, include=TRUE, echo=FALSE}
+
+mapview(Hogskola, col.regions = "blue", cex = 20, lwd = 0.4, zcol = "Namn", legend = FALSE) +
+  mapview(Gymnasieskola, col.regions = "purple", cex = 10, lwd = 0.4, zcol = "Namn", legend = FALSE)+
+  mapview(Grundskola, col.regions = "pink", cex = 5, lwd = 0.5, zcol = "Namn", legend = FALSE)
+  
+
+
+```
+
+```{r diagram utbildning, include=TRUE, echo=FALSE}
+
+
+ggplot(orter_utbildning_long, aes(x = reorder(namn, -befolkning_ort), 
+                                              y = Count, fill = Category)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  labs(title = "Antal skolor per ort", x = "", y = "Totalt antal skolor") +
+  scale_fill_manual(values = c("Hogskola" = "blue", "Gymnasieskola" = "purple", "Grundskola" = "pink")) +  # Justera nycklarna efter dina faktiska kategorinamn
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+

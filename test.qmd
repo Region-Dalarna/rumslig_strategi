@@ -1,0 +1,101 @@
+---
+title: "Rumslig strategi Dalarna"
+author: "Samhällsbyggnad"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+# libraries
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(tidyverse, 
+               sf, 
+               sp, 
+               httr, 
+               mapview, 
+               leaflet, 
+               readxl, 
+               keyring,
+               DBI,
+               units,
+               dplyr,
+               tidyr,
+               ggplot2,
+               classInt,
+               plotly)
+
+# source("https://raw.githubusercontent.com/Region-Dalarna/funktioner/main/func_postgis.R")
+# source("https://raw.githubusercontent.com/Region-Dalarna/funktioner/main/func_GIS.R")
+# source("https://raw.githubusercontent.com/Region-Dalarna/funktioner/main/func_text.R")
+# source("https://raw.githubusercontent.com/Region-Dalarna/funktioner/main/func_API.R")
+
+# # För att komma förbi proxyn
+# set_config(use_proxy(url = "http://mwg.ltdalarna.se", port = 9090, 
+#                      username = key_list(service = "auth")$username, password = key_get("auth", key_list(service = "auth")$username)))
+# 
+# # Disable SSL peer verification
+# httr::set_config(httr::config(ssl_verifypeer = 0L))
+
+# avoid scientific notation
+options(scipen=999)
+
+options(dplyr.summarise.inform = FALSE)
+```
+
+You can add options to executable code like this
+
+```{r läs in lager från G, include=FALSE, echo=FALSE}
+
+# =========================== läs in lager ==================
+
+# Sjukvard
+sjukvard_fil <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/Offentlig_service/Utbudspunkter.csv"
+
+# Befolkning
+befolkning_fil <- "G:/Samhällsanalys/GIS/projekt/rumslig_strategi/data/dag_natt_bef_500.gpkg"
+
+# Komersiell service nedladdat från Pipos Serviceanalys 2024-02-19
+kom_serv_filer <- "G:/Samhällsanalys/GIS/projekt/Regionala Noder/indata/FrånPipos/"
+
+# funktionella orter skapade i annat skript av tätorter, småorter, fritidshuområden och anläggningsområden samt en buffer på 300 meter.
+funktionella_orter_fil <- "data/funktionella_orter.gpkg"
+# st_layers(funktionella_orter_fil)
+funktionella_orter <- st_read(funktionella_orter_fil, layer = "funktionella_orter_egenskaper", crs = 3006)
+# names(funktionella_orter)
+smaorter <- st_read(funktionella_orter_fil, layer = "sma_orter", crs = 3006)
+tatorter <- st_read(funktionella_orter_fil, layer = "tat_orter", crs = 3006)
+fritid_layer <- st_read(funktionella_orter_fil, layer = "fritid_omr", crs = 3006)
+anlag_layer <- st_read(funktionella_orter_fil, layer = "anlag_omr", crs = 3006)
+
+```
+
+## Funktionella orter
+Kartan nedan ger en överblick över de funktionella orterna i Dalarna. Denna metodik är utvecklad som ett experiment för att inkludera och framhäva platser som annars inte synliggörs i traditionella analyser, vilka ofta begränsar sig till att endast inkludera tätorter. Ett exempel på en sådan plats är Sälenfjällen, som inte fångas upp när endast tätortsbegreppet används.
+
+Begreppet "funktionella orter" omfattar en bredare kategori av bebyggelser, inkluderande tätorter, småorter, fritidshusområden och anläggningsområden. För att skapa en mer sammanhängande bild av dessa områden har vi infört en buffertzon på 300 meter. Denna buffert används för att sammanlänka närliggande platser eller orter som annars skulle separeras av naturliga hinder, exempelvis älvar. Detta gör det möjligt att betrakta platser som Älvdalen och Västermyckeläng som en enhetlig funktionell ort.
+
+Genom att utgå från konceptet funktionella orter, hädanefter orter, får vi en mer inkluderande och detaljerad förståelse för regionens geografiska och samhälleliga struktur. Detta är särskilt viktigt för att kunna förstå hur olika platser samverkar och påverkar varandra, samt för att kunna identifiera och förstå regionala skillnader och särdrag.
+
+```{r karta orter, include=TRUE, echo=FALSE}
+mapview(funktionella_orter, layer.name = "Funktionella orter", lwd = 0.5, homebutton = FALSE, alpha.regions = 0.1, col.regions = "orange", hide = TRUE)+
+  mapview(smaorter, col.regions = "purple", layer.name = "Småorter", lwd = 0.3, homebutton = FALSE, alpha.regions = 0.3) +
+  mapview(tatorter, col.regions = "blue", layer.name = "Tätorter", lwd = 0.3, homebutton = FALSE, alpha.regions = 0.3) +
+  mapview(fritid_layer, col.regions = "green", layer.name = "Fritidshusområde", lwd = 0.3, homebutton = FALSE, alpha.regions = 0.3) +
+  mapview(anlag_layer, col.regions = "yellow", layer.name = "Anläggningsområde", lwd = 0.3, homebutton = FALSE, alpha.regions = 0.3)
+```
+
+
+
+
+
+
+
